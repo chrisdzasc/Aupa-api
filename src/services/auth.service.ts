@@ -60,7 +60,10 @@ export const loginProfesionista = async (email: string, password: string) => {
   }
 
   // Comparar la contraseña con el hash guardado
-  const passwordValida = await bcrypt.compare(password, profesionista.passwordHash);
+  const passwordValida = await bcrypt.compare(
+    password,
+    profesionista.passwordHash,
+  );
 
   if (!passwordValida) {
     throw new Error("Credenciales incorrectas");
@@ -70,7 +73,7 @@ export const loginProfesionista = async (email: string, password: string) => {
   const token = jwt.sign(
     { id: profesionista.id, email: profesionista.email },
     JWT_SECRET,
-    { expiresIn: "8h" }
+    { expiresIn: "8h" },
   );
 
   return {

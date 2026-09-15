@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes";
+import pacienteRoutes from "./routes/paciente.routes";
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ app.get("/", (req: Request, res: Response) => {
 
 // Rutas de la API
 app.use("/api/auth", authRoutes);
+app.use("/api/pacientes", pacienteRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
