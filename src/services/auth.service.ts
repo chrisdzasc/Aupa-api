@@ -1,8 +1,8 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma";
+import { config } from "../lib/config";
 
-const JWT_SECRET = process.env.JWT_SECRET || "secreto_por_defecto";
 const SALT_ROUNDS = 10;
 
 interface DatosRegistro {
@@ -72,8 +72,8 @@ export const loginProfesionista = async (email: string, password: string) => {
   // Generar el token
   const token = jwt.sign(
     { id: profesionista.id, email: profesionista.email },
-    JWT_SECRET,
-    { expiresIn: "8h" },
+    config.jwtSecret,
+    { expiresIn: "8h", algorithm: "HS256" },
   );
 
   return {

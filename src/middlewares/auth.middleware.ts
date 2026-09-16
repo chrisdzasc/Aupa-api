@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "secreto_por_defecto";
+import { config } from "../lib/config";
 
 // Extiende el tipo Request para incluir el profesionista autenticado
 export interface RequestAutenticado extends Request {
@@ -11,19 +10,23 @@ export interface RequestAutenticado extends Request {
 export const verificarToken = (
   req: RequestAutenticado,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   // El token viaja en el encabezado Authorization con el formato "Bearer <token>"
   const encabezado = req.headers.authorization;
 
   if (!encabezado || !encabezado.startsWith("Bearer ")) {
-    return res.status(401).json({ mensaje: "No autorizado. Token no proporcionado" });
+    return res
+      .status(401)
+      .json({ mensaje: "No autorizado. Token no proporcionado" });
   }
 
   const token = encabezado.split(" ")[1];
 
   try {
-    const decodificado = jwt.verify(token, JWT_SECRET) as { id: number; email: string };
+    const decodificado = jwt.verify(token, config.jwtSecret, {
+      algorithms: ["HS256"],
+    }) as { id: number; email: string };
     req.profesionistaId = decodificado.id;
     next();
   } catch (error) {
