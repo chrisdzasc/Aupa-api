@@ -17,6 +17,7 @@ model Profesionista {
   passwordHash      String   @db.VarChar(255)
   cedulaProfesional String?  @db.VarChar(20)
   activo            Boolean  @default(true)
+  ultimoExpediente  Int      @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -51,7 +52,7 @@ model Tutor {
 
 model Paciente {
   id               Int      @id @default(autoincrement())
-  numeroExpediente String   @unique @db.VarChar(20)
+  numeroExpediente String   @db.VarChar(20)
   nombre           String   @db.VarChar(100)
   sexo             Sexo
   fechaNacimiento  DateTime @db.Date
@@ -85,6 +86,7 @@ model Paciente {
   alertas                AlertaMedica[]
   antecedentesFamiliares AntecedenteFamiliar[]
 
+  @@unique([profesionistaId, numeroExpediente])
   @@index([profesionistaId])
   @@index([tutorId])
 }

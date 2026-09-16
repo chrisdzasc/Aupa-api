@@ -53,11 +53,9 @@ interface DatosNuevoPaciente {
   medicionInicial?: DatosMedicionInicial;
 }
 
-// Genera el siguiente número de expediente (EXP-0001, EXP-0002...)
-const generarNumeroExpediente = async (): Promise<string> => {
-  const total = await prisma.paciente.count();
-  const siguiente = total + 1;
-  return `EXP-${String(siguiente).padStart(4, "0")}`;
+// Da formato al número de expediente (4 → "EXP-0004")
+const formatearNumeroExpediente = (numero: number): string => {
+  return `EXP-${String(numero).padStart(4, "0")}`;
 };
 
 // Genera una contraseña temporal legible (ej. "Aupa-4F7B2K")
@@ -79,122 +77,143 @@ export const crearPaciente = async (
   profesionistaId: number,
   datos: DatosNuevoPaciente,
 ) => {
-  // Buscar si el tutor ya existe por su email
-  let tutor = await prisma.tutor.findUnique({
-    where: { email: datos.tutor.email },
-  });
+  const generarAcceso = datos.tutor.generarAcceso ?? true;
 
-  // Guardamos la contraseña temporal para devolverla (solo se muestra una vez)
+  // Preparar las credenciales ANTES de la transacción.
+  // bcrypt es lento a propósito, y una transacción debe durar lo menos posible.
+  // Si el tutor ya existe, estos valores simplemente no se usan.
   let passwordTemporal: string | null = null;
+  let passwordHash: string | undefined = undefined;
+  let tokenConfirmacion: string | undefined = undefined;
+  let tokenExpira: Date | undefined = undefined;
 
-  // Si no existe, crearlo
-  if (!tutor) {
-    const generarAcceso = datos.tutor.generarAcceso ?? true;
+  if (generarAcceso) {
+    passwordTemporal = generarPasswordTemporal();
+    passwordHash = await bcrypt.hash(passwordTemporal, 10);
+    tokenConfirmacion = generarTokenConfirmacion();
 
-    let passwordHash: string | undefined = undefined;
-    let tokenConfirmacion: string | undefined = undefined;
-    let tokenExpira: Date | undefined = undefined;
-
-    if (generarAcceso) {
-      passwordTemporal = generarPasswordTemporal();
-      passwordHash = await bcrypt.hash(passwordTemporal, 10);
-      tokenConfirmacion = generarTokenConfirmacion();
-
-      // El token expira en 7 días
-      tokenExpira = new Date();
-      tokenExpira.setDate(tokenExpira.getDate() + 7);
-    }
-
-    tutor = await prisma.tutor.create({
-      data: {
-        nombre: datos.tutor.nombre,
-        parentesco: datos.tutor.parentesco,
-        telefono: datos.tutor.telefono,
-        email: datos.tutor.email,
-        tieneAcceso: generarAcceso,
-        passwordHash,
-        tokenConfirmacion,
-        tokenExpira,
-        cuentaConfirmada: false,
-        debeCambiarPassword: true,
-      },
-    });
+    // El token expira en 7 días
+    tokenExpira = new Date();
+    tokenExpira.setDate(tokenExpira.getDate() + 7);
   }
 
-  const numeroExpediente = await generarNumeroExpediente();
+  // Todo lo que ocurre dentro se guarda completo o no se guarda nada
+  const { paciente, tutor, tutorEsNuevo } = await prisma.$transaction(
+    async (tx) => {
+      // 1. Buscar al tutor por email o crearlo si no existe
+      const tutorExistente = await tx.tutor.findUnique({
+        where: { email: datos.tutor.email },
+      });
 
-  // Crear el paciente con todo lo relacionado en una sola operación
-  const paciente = await prisma.paciente.create({
-    data: {
-      numeroExpediente,
-      nombre: datos.nombre,
-      sexo: datos.sexo,
-      fechaNacimiento: new Date(datos.fechaNacimiento),
-      semanasGestacion: datos.semanasGestacion,
-      tipoParto: datos.tipoParto,
-      pesoNacerKg: datos.pesoNacerKg,
-      tallaNacerCm: datos.tallaNacerCm,
-      perimetroCefalicoNacerCm: datos.perimetroCefalicoNacerCm,
-      tipoAlimentacion: datos.tipoAlimentacion,
-      inicioComplementaria: datos.inicioComplementaria,
-      observaciones: datos.observaciones,
-      profesionistaId,
-      tutorId: tutor.id,
+      const tutor =
+        tutorExistente ??
+        (await tx.tutor.create({
+          data: {
+            nombre: datos.tutor.nombre,
+            parentesco: datos.tutor.parentesco,
+            telefono: datos.tutor.telefono,
+            email: datos.tutor.email,
+            tieneAcceso: generarAcceso,
+            passwordHash,
+            tokenConfirmacion,
+            tokenExpira,
+            cuentaConfirmada: false,
+            debeCambiarPassword: true,
+          },
+        }));
 
-      // Escrituras anidadas: crea las alertas junto con el paciente
-      alertas: datos.alertas?.length ? { create: datos.alertas } : undefined,
+      // 2. Incrementar el contador del profesionista de forma atómica.
+      //    MySQL bloquea su fila hasta que termine la transacción.
+      const profesionista = await tx.profesionista.update({
+        where: { id: profesionistaId },
+        data: { ultimoExpediente: { increment: 1 } },
+        select: { ultimoExpediente: true },
+      });
 
-      antecedentesFamiliares: datos.antecedentesFamiliares?.length
-        ? { create: datos.antecedentesFamiliares }
-        : undefined,
+      const numeroExpediente = formatearNumeroExpediente(
+        profesionista.ultimoExpediente,
+      );
 
-      // Crea la primera medición si viene
-      mediciones: datos.medicionInicial
-        ? {
-            create: {
-              fechaConsulta: new Date(datos.medicionInicial.fechaConsulta),
-              pesoKg: datos.medicionInicial.pesoKg,
-              tallaCm: datos.medicionInicial.tallaCm,
-              perimetroCefalicoCm: datos.medicionInicial.perimetroCefalicoCm,
-              perimetroBraquialCm: datos.medicionInicial.perimetroBraquialCm,
-              cinturaCm: datos.medicionInicial.cinturaCm,
-              abdomenCm: datos.medicionInicial.abdomenCm,
-              caderaCm: datos.medicionInicial.caderaCm,
-              pantorrillaCm: datos.medicionInicial.pantorrillaCm,
-              tricipitalMm: datos.medicionInicial.tricipitalMm,
-              notas: datos.medicionInicial.notas,
-            },
-          }
-        : undefined,
-    },
-    include: {
-      tutor: {
-        select: {
-          id: true,
-          nombre: true,
-          parentesco: true,
-          telefono: true,
-          email: true,
-          tieneAcceso: true,
-          cuentaConfirmada: true,
+      // 3. Crear el paciente con todo lo relacionado
+      const paciente = await tx.paciente.create({
+        data: {
+          numeroExpediente,
+          nombre: datos.nombre,
+          sexo: datos.sexo,
+          fechaNacimiento: new Date(datos.fechaNacimiento),
+          semanasGestacion: datos.semanasGestacion,
+          tipoParto: datos.tipoParto,
+          pesoNacerKg: datos.pesoNacerKg,
+          tallaNacerCm: datos.tallaNacerCm,
+          perimetroCefalicoNacerCm: datos.perimetroCefalicoNacerCm,
+          tipoAlimentacion: datos.tipoAlimentacion,
+          inicioComplementaria: datos.inicioComplementaria,
+          observaciones: datos.observaciones,
+          profesionistaId,
+          tutorId: tutor.id,
+
+          alertas: datos.alertas?.length
+            ? { create: datos.alertas }
+            : undefined,
+
+          antecedentesFamiliares: datos.antecedentesFamiliares?.length
+            ? { create: datos.antecedentesFamiliares }
+            : undefined,
+
+          mediciones: datos.medicionInicial
+            ? {
+                create: {
+                  fechaConsulta: new Date(datos.medicionInicial.fechaConsulta),
+                  pesoKg: datos.medicionInicial.pesoKg,
+                  tallaCm: datos.medicionInicial.tallaCm,
+                  perimetroCefalicoCm:
+                    datos.medicionInicial.perimetroCefalicoCm,
+                  perimetroBraquialCm:
+                    datos.medicionInicial.perimetroBraquialCm,
+                  cinturaCm: datos.medicionInicial.cinturaCm,
+                  abdomenCm: datos.medicionInicial.abdomenCm,
+                  caderaCm: datos.medicionInicial.caderaCm,
+                  pantorrillaCm: datos.medicionInicial.pantorrillaCm,
+                  tricipitalMm: datos.medicionInicial.tricipitalMm,
+                  notas: datos.medicionInicial.notas,
+                },
+              }
+            : undefined,
         },
-      },
-      alertas: true,
-      antecedentesFamiliares: true,
-      mediciones: true,
+        include: {
+          tutor: {
+            select: {
+              id: true,
+              nombre: true,
+              parentesco: true,
+              telefono: true,
+              email: true,
+              tieneAcceso: true,
+              cuentaConfirmada: true,
+            },
+          },
+          alertas: true,
+          antecedentesFamiliares: true,
+          mediciones: true,
+        },
+      });
+
+      return { paciente, tutor, tutorEsNuevo: !tutorExistente };
     },
-  });
+  );
 
   return {
     paciente,
-    credencialesTutor: passwordTemporal
-      ? {
-          email: tutor.email,
-          passwordTemporal,
-          mensaje:
-            "Estas credenciales solo se muestran una vez. Cuando se implemente el envío de correo, se enviarán automáticamente al tutor.",
-        }
-      : null,
+    // Solo se devuelven credenciales si el tutor se creó en este registro
+    credencialesTutor:
+      tutorEsNuevo && passwordTemporal
+        ? {
+            email: tutor.email,
+            passwordTemporal,
+            mensaje:
+              "Estas credenciales solo se muestran una vez. Cuando se implemente el envío de correo, se enviarán automáticamente al tutor.",
+          }
+        : null,
   };
 };
 
