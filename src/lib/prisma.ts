@@ -8,6 +8,7 @@ const adapter = new PrismaMariaDb({
   user: config.db.user,
   password: config.db.password,
   database: config.db.name,
+  timezone: "Z",
   allowPublicKeyRetrieval: true,
   connectionLimit: 5,
 });

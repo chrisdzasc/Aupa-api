@@ -2,6 +2,7 @@ import prisma from "../lib/prisma";
 import { Sexo, TipoParto, Parentesco, TipoAlerta } from "@prisma/client";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
+import { aFechaISO } from "../lib/fechas";
 
 interface DatosAlerta {
   descripcion: string;
@@ -203,8 +204,14 @@ export const crearPaciente = async (
   );
 
   return {
-    paciente,
-    // Solo se devuelven credenciales si el tutor se creó en este registro
+    paciente: {
+      ...paciente,
+      fechaNacimiento: aFechaISO(paciente.fechaNacimiento),
+      mediciones: paciente.mediciones.map((medicion) => ({
+        ...medicion,
+        fechaConsulta: aFechaISO(medicion.fechaConsulta),
+      })),
+    },
     credencialesTutor:
       tutorEsNuevo && passwordTemporal
         ? {
@@ -233,7 +240,14 @@ export const listarPacientes = async (profesionistaId: number) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return pacientes;
+  return pacientes.map((paciente) => ({
+    ...paciente,
+    fechaNacimiento: aFechaISO(paciente.fechaNacimiento),
+    mediciones: paciente.mediciones.map((medicion) => ({
+      ...medicion,
+      fechaConsulta: aFechaISO(medicion.fechaConsulta),
+    })),
+  }));
 };
 
 export const obtenerPaciente = async (id: number, profesionistaId: number) => {
@@ -261,5 +275,12 @@ export const obtenerPaciente = async (id: number, profesionistaId: number) => {
     throw new Error("Paciente no encontrado");
   }
 
-  return paciente;
+  return {
+    ...paciente,
+    fechaNacimiento: aFechaISO(paciente.fechaNacimiento),
+    mediciones: paciente.mediciones.map((medicion) => ({
+      ...medicion,
+      fechaConsulta: aFechaISO(medicion.fechaConsulta),
+    })),
+  };
 };
