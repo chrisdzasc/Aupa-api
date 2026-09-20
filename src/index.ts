@@ -3,6 +3,7 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes";
 import pacienteRoutes from "./routes/paciente.routes";
+import medicionRoutes from "./routes/medicion.routes";
 
 const app = express();
 const PORT = config.port;
@@ -17,6 +18,7 @@ app.get("/", (req: Request, res: Response) => {
 // Rutas de la API
 app.use("/api/auth", authRoutes);
 app.use("/api/pacientes", pacienteRoutes);
+app.use("/api/mediciones", medicionRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
