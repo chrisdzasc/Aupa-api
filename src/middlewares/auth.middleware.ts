@@ -26,7 +26,16 @@ export const verificarToken = (
   try {
     const decodificado = jwt.verify(token, config.jwtSecret, {
       algorithms: ["HS256"],
-    }) as { id: number; email: string };
+    }) as { id: number; email: string; rol?: string };
+
+    // Esta ruta es exclusiva del profesionista. Un token de tutor, o uno
+    // antiguo sin rol, no debe pasar aunque esté correctamente firmado.
+    if (decodificado.rol !== "profesionista") {
+      return res
+        .status(403)
+        .json({ mensaje: "No tienes permiso para acceder a este recurso" });
+    }
+
     req.profesionistaId = decodificado.id;
     next();
   } catch (error) {

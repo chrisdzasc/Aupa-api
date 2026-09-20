@@ -71,7 +71,7 @@ export const loginProfesionista = async (email: string, password: string) => {
 
   // Generar el token
   const token = jwt.sign(
-    { id: profesionista.id, email: profesionista.email },
+    { id: profesionista.id, email: profesionista.email, rol: "profesionista" },
     config.jwtSecret,
     { expiresIn: "8h", algorithm: "HS256" },
   );
