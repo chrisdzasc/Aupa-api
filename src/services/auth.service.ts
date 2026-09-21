@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma";
 import { config } from "../lib/config";
+import { normalizarEmail } from "../lib/texto";
 
 const SALT_ROUNDS = 10;
 
@@ -15,7 +16,7 @@ interface DatosRegistro {
 export const registrarProfesionista = async (datos: DatosRegistro) => {
   // Verificar que el email no esté registrado
   const existente = await prisma.profesionista.findUnique({
-    where: { email: datos.email },
+    where: { email: normalizarEmail(datos.email) },
   });
 
   if (existente) {
@@ -29,7 +30,7 @@ export const registrarProfesionista = async (datos: DatosRegistro) => {
   const profesionista = await prisma.profesionista.create({
     data: {
       nombre: datos.nombre,
-      email: datos.email,
+      email: normalizarEmail(datos.email),
       passwordHash,
       cedulaProfesional: datos.cedulaProfesional,
     },
@@ -48,7 +49,7 @@ export const registrarProfesionista = async (datos: DatosRegistro) => {
 export const loginProfesionista = async (email: string, password: string) => {
   // Buscar al profesionista
   const profesionista = await prisma.profesionista.findUnique({
-    where: { email },
+    where: { email: normalizarEmail(email) },
   });
 
   if (!profesionista) {

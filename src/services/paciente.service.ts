@@ -3,6 +3,7 @@ import { Sexo, TipoParto, Parentesco, TipoAlerta } from "@prisma/client";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { aFechaISO } from "../lib/fechas";
+import { normalizarEmail } from "../lib/texto";
 
 interface DatosAlerta {
   descripcion: string;
@@ -98,12 +99,14 @@ export const crearPaciente = async (
     tokenExpira.setDate(tokenExpira.getDate() + 7);
   }
 
+  const emailTutor = normalizarEmail(datos.tutor.email);
+
   // Todo lo que ocurre dentro se guarda completo o no se guarda nada
   const { paciente, tutor, tutorEsNuevo } = await prisma.$transaction(
     async (tx) => {
       // 1. Buscar al tutor por email o crearlo si no existe
       const tutorExistente = await tx.tutor.findUnique({
-        where: { email: datos.tutor.email },
+        where: { email: emailTutor },
       });
 
       const tutor =
@@ -113,7 +116,7 @@ export const crearPaciente = async (
             nombre: datos.tutor.nombre,
             parentesco: datos.tutor.parentesco,
             telefono: datos.tutor.telefono,
-            email: datos.tutor.email,
+            email: emailTutor,
             tieneAcceso: generarAcceso,
             passwordHash,
             tokenConfirmacion,

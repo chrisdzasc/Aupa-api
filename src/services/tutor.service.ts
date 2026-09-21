@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma";
 import { config } from "../lib/config";
+import { normalizarEmail } from "../lib/texto";
 
 // Hash de una contraseña que no existe. Se compara contra él cuando el
 // correo no está registrado, para que la respuesta tarde lo mismo en
@@ -35,7 +36,7 @@ export const loginTutor = async (email: string, password: string) => {
   }
 
   const tutor = await prisma.tutor.findUnique({
-    where: { email: email.trim().toLowerCase() },
+    where: { email: normalizarEmail(email) },
   });
 
   // Siempre se ejecuta bcrypt.compare, exista o no el tutor
