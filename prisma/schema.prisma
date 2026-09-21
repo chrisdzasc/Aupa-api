@@ -93,7 +93,7 @@ model Paciente {
 
 model AlertaMedica {
   id          Int        @id @default(autoincrement())
-  descripcion String     @db.VarChar(60)
+  descripcion String     @db.VarChar(100)
   tipo        TipoAlerta
   createdAt   DateTime   @default(now())
 
