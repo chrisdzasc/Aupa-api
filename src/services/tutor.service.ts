@@ -3,6 +3,14 @@ import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma";
 import { config } from "../lib/config";
 import { normalizarEmail } from "../lib/texto";
+import {
+  aFechaISO,
+  edadEnMeses,
+  hoyEnMexico,
+  aFechaMexico,
+  aHoraMexico,
+} from "../lib/fechas";
+import { calcularIMC, aNumero } from "../lib/antropometria";
 
 // Hash de una contraseña que no existe. Se compara contra él cuando el
 // correo no está registrado, para que la respuesta tarde lo mismo en
@@ -142,4 +150,138 @@ export const obtenerPerfil = async (tutorId: number) => {
   }
 
   return tutor;
+};
+
+// Rango de edad del checklist de alimentos, confirmado con la nutrióloga
+const CHECKLIST_EDAD_MIN_MESES = 6;
+const CHECKLIST_EDAD_MAX_MESES = 24;
+
+// Lista de hijos del tutor, con su última medición
+export const listarHijos = async (tutorId: number) => {
+  const pacientes = await prisma.paciente.findMany({
+    where: { tutorId, activo: true },
+    orderBy: { nombre: "asc" },
+    include: {
+      profesionista: { select: { nombre: true } },
+      mediciones: {
+        orderBy: { fechaConsulta: "desc" },
+        take: 1,
+        select: { fechaConsulta: true, pesoKg: true, tallaCm: true },
+      },
+    },
+  });
+
+  return pacientes.map((p) => {
+    const ultima = p.mediciones[0];
+
+    return {
+      id: p.id,
+      nombre: p.nombre,
+      sexo: p.sexo,
+      fechaNacimiento: aFechaISO(p.fechaNacimiento),
+      nutriologo: p.profesionista.nombre,
+      ultimaMedicion: ultima
+        ? {
+            fechaConsulta: aFechaISO(ultima.fechaConsulta),
+            pesoKg: Number(ultima.pesoKg),
+            tallaCm: Number(ultima.tallaCm),
+          }
+        : null,
+    };
+  });
+};
+
+// Detalle de un hijo del tutor
+export const obtenerHijo = async (pacienteId: number, tutorId: number) => {
+  const p = await prisma.paciente.findFirst({
+    where: { id: pacienteId, tutorId, activo: true },
+    include: {
+      profesionista: {
+        select: { nombre: true, email: true, telefonoContacto: true },
+      },
+      alertas: { select: { descripcion: true, tipo: true } },
+      mediciones: { orderBy: { fechaConsulta: "desc" }, take: 1 },
+      citas: {
+        where: { estado: "PENDIENTE", fechaHora: { gte: new Date() } },
+        orderBy: { fechaHora: "asc" },
+        take: 1,
+        select: { id: true, fechaHora: true },
+      },
+    },
+  });
+
+  if (!p) {
+    throw new Error("Paciente no encontrado");
+  }
+
+  const edadHoy = edadEnMeses(p.fechaNacimiento, hoyEnMexico());
+  const ultima = p.mediciones[0];
+  const cita = p.citas[0];
+
+  return {
+    id: p.id,
+    nombre: p.nombre,
+    sexo: p.sexo,
+    fechaNacimiento: aFechaISO(p.fechaNacimiento),
+    numeroExpediente: p.numeroExpediente,
+    aplicaChecklistAlimentos:
+      edadHoy >= CHECKLIST_EDAD_MIN_MESES && edadHoy < CHECKLIST_EDAD_MAX_MESES,
+    nutriologo: {
+      nombre: p.profesionista.nombre,
+      email: p.profesionista.email,
+      telefonoContacto: p.profesionista.telefonoContacto,
+    },
+    alertas: p.alertas,
+    estadoActual: ultima
+      ? {
+          fechaConsulta: aFechaISO(ultima.fechaConsulta),
+          edadMeses: edadEnMeses(p.fechaNacimiento, ultima.fechaConsulta),
+          pesoKg: Number(ultima.pesoKg),
+          tallaCm: Number(ultima.tallaCm),
+          imc: calcularIMC(Number(ultima.pesoKg), Number(ultima.tallaCm)),
+          perimetroCefalicoCm: aNumero(ultima.perimetroCefalicoCm),
+          estadoNutricional: null,
+        }
+      : null,
+    proximaCita: cita
+      ? {
+          id: cita.id,
+          fecha: aFechaMexico(cita.fechaHora),
+          hora: aHoraMexico(cita.fechaHora),
+        }
+      : null,
+  };
+};
+
+// Historial de mediciones de un hijo, sin notas clínicas
+export const listarMedicionesHijo = async (
+  pacienteId: number,
+  tutorId: number,
+) => {
+  const paciente = await prisma.paciente.findFirst({
+    where: { id: pacienteId, tutorId, activo: true },
+    select: { fechaNacimiento: true },
+  });
+
+  if (!paciente) {
+    throw new Error("Paciente no encontrado");
+  }
+
+  const mediciones = await prisma.medicion.findMany({
+    where: { pacienteId },
+    orderBy: { fechaConsulta: "desc" },
+  });
+
+  return mediciones.map((m) => ({
+    id: m.id,
+    fechaConsulta: aFechaISO(m.fechaConsulta),
+    edadMeses: edadEnMeses(paciente.fechaNacimiento, m.fechaConsulta),
+    pesoKg: Number(m.pesoKg),
+    tallaCm: Number(m.tallaCm),
+    imc: calcularIMC(Number(m.pesoKg), Number(m.tallaCm)),
+    perimetroCefalicoCm: aNumero(m.perimetroCefalicoCm),
+    // Se llenarán cuando exista el cálculo con el método LMS
+    puntuacionZ: { pesoEdad: null, tallaEdad: null, imcEdad: null },
+    estadoNutricional: null,
+  }));
 };

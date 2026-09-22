@@ -8,6 +8,9 @@ import { limitarLogin } from "../middlewares/rateLimit.middleware";
 
 const router = Router();
 
+// Middlewares de las rutas del tutor que ya cambió su contraseña
+const tutorActivo = [verificarTokenTutor, exigirPasswordCambiada];
+
 // Pública
 router.post("/auth/login", limitarLogin, tutorController.login);
 
@@ -25,6 +28,15 @@ router.get(
   verificarTokenTutor,
   exigirPasswordCambiada,
   tutorController.perfil,
+);
+
+// Hijos del tutor
+router.get("/pacientes", ...tutorActivo, tutorController.hijos);
+router.get("/pacientes/:id", ...tutorActivo, tutorController.hijo);
+router.get(
+  "/pacientes/:id/mediciones",
+  ...tutorActivo,
+  tutorController.medicionesHijo,
 );
 
 export default router;

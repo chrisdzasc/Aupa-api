@@ -37,6 +37,17 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
+// Convierte el id de la URL a número o lanza un error
+const leerId = (valor: string | string[] | undefined): number => {
+  const id = typeof valor === "string" ? Number(valor) : NaN;
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error("Identificador de paciente inválido");
+  }
+
+  return id;
+};
+
 export const cambiarPassword = async (req: RequestTutor, res: Response) => {
   try {
     const resultado = await tutorService.cambiarPassword(
@@ -59,5 +70,38 @@ export const perfil = async (req: RequestTutor, res: Response) => {
     return res.status(200).json({ tutor });
   } catch (error) {
     return responderError(res, error, "Error al obtener el perfil");
+  }
+};
+
+export const hijos = async (req: RequestTutor, res: Response) => {
+  try {
+    const pacientes = await tutorService.listarHijos(req.tutorId!);
+    return res.status(200).json({ pacientes });
+  } catch (error) {
+    return responderError(res, error, "Error al obtener los pacientes");
+  }
+};
+
+export const hijo = async (req: RequestTutor, res: Response) => {
+  try {
+    const paciente = await tutorService.obtenerHijo(
+      leerId(req.params.id),
+      req.tutorId!,
+    );
+    return res.status(200).json({ paciente });
+  } catch (error) {
+    return responderError(res, error, "Error al obtener el paciente");
+  }
+};
+
+export const medicionesHijo = async (req: RequestTutor, res: Response) => {
+  try {
+    const mediciones = await tutorService.listarMedicionesHijo(
+      leerId(req.params.id),
+      req.tutorId!,
+    );
+    return res.status(200).json({ mediciones });
+  } catch (error) {
+    return responderError(res, error, "Error al obtener las mediciones");
   }
 };

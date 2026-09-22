@@ -16,6 +16,7 @@ model Profesionista {
   email             String   @unique @db.VarChar(100)
   passwordHash      String   @db.VarChar(255)
   cedulaProfesional String?  @db.VarChar(20)
+  telefonoContacto  String?  @db.VarChar(20)
   activo            Boolean  @default(true)
   ultimoExpediente  Int      @default(0)
   createdAt         DateTime @default(now())
