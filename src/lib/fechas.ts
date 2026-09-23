@@ -19,6 +19,17 @@ export const edadEnMeses = (nacimiento: Date, fecha: Date): number => {
   return Math.max(0, meses);
 };
 
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+// Días cumplidos entre dos fechas de calendario.
+// Ambas son medianoche UTC, así que la resta da días exactos.
+export const edadEnDias = (nacimiento: Date, fecha: Date): number => {
+  const dias = Math.round(
+    (fecha.getTime() - nacimiento.getTime()) / MS_POR_DIA,
+  );
+  return Math.max(0, dias);
+};
+
 // La fecha de hoy en México, como medianoche UTC, para compararla con
 // campos @db.Date sin que la zona horaria del servidor la mueva
 export const hoyEnMexico = (): Date => {

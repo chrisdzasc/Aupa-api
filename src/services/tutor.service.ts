@@ -11,6 +11,8 @@ import {
   aHoraMexico,
 } from "../lib/fechas";
 import { calcularIMC, aNumero } from "../lib/antropometria";
+import { edadEnDias } from "../lib/fechas";
+import { calcularPuntuacionesZ } from "../lib/oms";
 
 // Hash de una contraseña que no existe. Se compara contra él cuando el
 // correo no está registrado, para que la respuesta tarde lo mismo en
@@ -233,15 +235,32 @@ export const obtenerHijo = async (pacienteId: number, tutorId: number) => {
     },
     alertas: p.alertas,
     estadoActual: ultima
-      ? {
-          fechaConsulta: aFechaISO(ultima.fechaConsulta),
-          edadMeses: edadEnMeses(p.fechaNacimiento, ultima.fechaConsulta),
-          pesoKg: Number(ultima.pesoKg),
-          tallaCm: Number(ultima.tallaCm),
-          imc: calcularIMC(Number(ultima.pesoKg), Number(ultima.tallaCm)),
-          perimetroCefalicoCm: aNumero(ultima.perimetroCefalicoCm),
-          estadoNutricional: null,
-        }
+      ? (() => {
+          const pesoKg = Number(ultima.pesoKg);
+          const tallaCm = Number(ultima.tallaCm);
+          const z = calcularPuntuacionesZ({
+            sexo: p.sexo,
+            edadDias: edadEnDias(p.fechaNacimiento, ultima.fechaConsulta),
+            pesoKg,
+            tallaCm,
+          });
+
+          return {
+            fechaConsulta: aFechaISO(ultima.fechaConsulta),
+            edadMeses: edadEnMeses(p.fechaNacimiento, ultima.fechaConsulta),
+            pesoKg,
+            tallaCm,
+            imc: calcularIMC(pesoKg, tallaCm),
+            perimetroCefalicoCm: aNumero(ultima.perimetroCefalicoCm),
+            puntuacionZ: {
+              pesoEdad: z.pesoEdad,
+              tallaEdad: z.tallaEdad,
+              imcEdad: z.imcEdad,
+              pesoTalla: z.pesoTalla,
+            },
+            estadoNutricional: null,
+          };
+        })()
       : null,
     proximaCita: cita
       ? {
@@ -260,7 +279,7 @@ export const listarMedicionesHijo = async (
 ) => {
   const paciente = await prisma.paciente.findFirst({
     where: { id: pacienteId, tutorId, activo: true },
-    select: { fechaNacimiento: true },
+    select: { fechaNacimiento: true, sexo: true },
   });
 
   if (!paciente) {
@@ -272,16 +291,32 @@ export const listarMedicionesHijo = async (
     orderBy: { fechaConsulta: "desc" },
   });
 
-  return mediciones.map((m) => ({
-    id: m.id,
-    fechaConsulta: aFechaISO(m.fechaConsulta),
-    edadMeses: edadEnMeses(paciente.fechaNacimiento, m.fechaConsulta),
-    pesoKg: Number(m.pesoKg),
-    tallaCm: Number(m.tallaCm),
-    imc: calcularIMC(Number(m.pesoKg), Number(m.tallaCm)),
-    perimetroCefalicoCm: aNumero(m.perimetroCefalicoCm),
-    // Se llenarán cuando exista el cálculo con el método LMS
-    puntuacionZ: { pesoEdad: null, tallaEdad: null, imcEdad: null },
-    estadoNutricional: null,
-  }));
+  return mediciones.map((m) => {
+    const pesoKg = Number(m.pesoKg);
+    const tallaCm = Number(m.tallaCm);
+
+    const z = calcularPuntuacionesZ({
+      sexo: paciente.sexo,
+      edadDias: edadEnDias(paciente.fechaNacimiento, m.fechaConsulta),
+      pesoKg,
+      tallaCm,
+    });
+
+    return {
+      id: m.id,
+      fechaConsulta: aFechaISO(m.fechaConsulta),
+      edadMeses: edadEnMeses(paciente.fechaNacimiento, m.fechaConsulta),
+      pesoKg,
+      tallaCm,
+      imc: calcularIMC(pesoKg, tallaCm),
+      perimetroCefalicoCm: aNumero(m.perimetroCefalicoCm),
+      puntuacionZ: {
+        pesoEdad: z.pesoEdad,
+        tallaEdad: z.tallaEdad,
+        imcEdad: z.imcEdad,
+        pesoTalla: z.pesoTalla,
+      },
+      estadoNutricional: null,
+    };
+  });
 };
