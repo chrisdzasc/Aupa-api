@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { aFechaISO } from "../lib/fechas";
 import { normalizarEmail } from "../lib/texto";
+import { puntuacionesDeMedicion } from "../lib/antropometria";
 
 interface DatosAlerta {
   descripcion: string;
@@ -284,6 +285,7 @@ export const obtenerPaciente = async (id: number, profesionistaId: number) => {
     mediciones: paciente.mediciones.map((medicion) => ({
       ...medicion,
       fechaConsulta: aFechaISO(medicion.fechaConsulta),
+      puntuacionZ: puntuacionesDeMedicion(paciente, medicion),
     })),
   };
 };

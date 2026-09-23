@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma";
 import { aFechaISO } from "../lib/fechas";
+import { puntuacionesDeMedicion } from "../lib/antropometria";
 
 export interface DatosMedicion {
   fechaConsulta: string;
@@ -15,10 +16,16 @@ export interface DatosMedicion {
   notas?: string;
 }
 
-// Formatea la fecha de calendario y deja el resto igual
-const formatearMedicion = <T extends { fechaConsulta: Date }>(medicion: T) => ({
+// Formatea la fecha de calendario y agrega las puntuaciones Z de la OMS
+const formatearMedicion = <
+  T extends { fechaConsulta: Date; pesoKg: unknown; tallaCm: unknown },
+>(
+  medicion: T,
+  paciente: { sexo: "M" | "F"; fechaNacimiento: Date },
+) => ({
   ...medicion,
   fechaConsulta: aFechaISO(medicion.fechaConsulta),
+  puntuacionZ: puntuacionesDeMedicion(paciente, medicion),
 });
 
 // Busca un paciente del profesionista. Si no es suyo, es como si no existiera.
@@ -28,7 +35,7 @@ const buscarPacienteDelProfesionista = async (
 ) => {
   const paciente = await prisma.paciente.findFirst({
     where: { id: pacienteId, profesionistaId },
-    select: { id: true, fechaNacimiento: true },
+    select: { id: true, fechaNacimiento: true, sexo: true },
   });
 
   if (!paciente) {
@@ -136,7 +143,7 @@ export const crearMedicion = async (
     },
   });
 
-  return formatearMedicion(medicion);
+  return formatearMedicion(medicion, paciente);
 };
 
 // Listar las mediciones de un paciente, de la más reciente a la más antigua
@@ -144,14 +151,17 @@ export const listarMediciones = async (
   pacienteId: number,
   profesionistaId: number,
 ) => {
-  await buscarPacienteDelProfesionista(pacienteId, profesionistaId);
+  const paciente = await buscarPacienteDelProfesionista(
+    pacienteId,
+    profesionistaId,
+  );
 
   const mediciones = await prisma.medicion.findMany({
     where: { pacienteId },
     orderBy: { fechaConsulta: "desc" },
   });
 
-  return mediciones.map(formatearMedicion);
+  return mediciones.map((m) => formatearMedicion(m, paciente));
 };
 
 // Busca una medición cuyo paciente pertenezca al profesionista
@@ -162,7 +172,7 @@ const buscarMedicionDelProfesionista = async (
   const medicion = await prisma.medicion.findFirst({
     where: { id, paciente: { profesionistaId } },
     include: {
-      paciente: { select: { id: true, fechaNacimiento: true } },
+      paciente: { select: { id: true, fechaNacimiento: true, sexo: true } },
     },
   });
 
@@ -180,7 +190,7 @@ export const obtenerMedicion = async (id: number, profesionistaId: number) => {
     profesionistaId,
   );
 
-  return formatearMedicion(medicion);
+  return formatearMedicion(medicion, paciente);
 };
 
 // Editar una medición
@@ -211,7 +221,7 @@ export const editarMedicion = async (
     },
   });
 
-  return formatearMedicion(medicion);
+  return formatearMedicion(medicion, existente.paciente);
 };
 
 // Eliminar una medición (borrado real)
