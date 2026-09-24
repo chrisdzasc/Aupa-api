@@ -33,6 +33,7 @@ router.get(
 // Hijos del tutor
 router.get("/pacientes", ...tutorActivo, tutorController.hijos);
 router.get("/pacientes/:id", ...tutorActivo, tutorController.hijo);
+router.get("/pacientes/:id/curvas", ...tutorActivo, tutorController.curvas);
 router.get(
   "/pacientes/:id/mediciones",
   ...tutorActivo,

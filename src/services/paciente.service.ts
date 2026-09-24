@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { aFechaISO } from "../lib/fechas";
 import { normalizarEmail } from "../lib/texto";
 import { puntuacionesDeMedicion } from "../lib/antropometria";
+import { construirCurva } from "../lib/oms";
 
 interface DatosAlerta {
   descripcion: string;
@@ -83,7 +84,6 @@ export const crearPaciente = async (
   const generarAcceso = datos.tutor.generarAcceso ?? true;
 
   // Preparar las credenciales ANTES de la transacción.
-  // bcrypt es lento a propósito, y una transacción debe durar lo menos posible.
   // Si el tutor ya existe, estos valores simplemente no se usan.
   let passwordTemporal: string | null = null;
   let passwordHash: string | undefined = undefined;
@@ -128,7 +128,6 @@ export const crearPaciente = async (
         }));
 
       // 2. Incrementar el contador del profesionista de forma atómica.
-      //    MySQL bloquea su fila hasta que termine la transacción.
       const profesionista = await tx.profesionista.update({
         where: { id: profesionistaId },
         data: { ultimoExpediente: { increment: 1 } },
@@ -288,4 +287,25 @@ export const obtenerPaciente = async (id: number, profesionistaId: number) => {
       puntuacionZ: puntuacionesDeMedicion(paciente, medicion),
     })),
   };
+};
+
+export const obtenerCurva = async (
+  pacienteId: number,
+  profesionistaId: number,
+  indicador: "talla-edad" | "peso-edad" | "imc-edad" | "peso-talla",
+) => {
+  const paciente = await prisma.paciente.findFirst({
+    where: { id: pacienteId, profesionistaId },
+    select: {
+      sexo: true,
+      fechaNacimiento: true,
+      mediciones: { orderBy: { fechaConsulta: "asc" } },
+    },
+  });
+
+  if (!paciente) {
+    throw new Error("Paciente no encontrado");
+  }
+
+  return construirCurva(paciente, indicador);
 };

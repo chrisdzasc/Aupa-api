@@ -15,5 +15,6 @@ router.get("/:id", pacienteController.obtener);
 // Mediciones de un paciente
 router.post("/:id/mediciones", medicionController.crear);
 router.get("/:id/mediciones", medicionController.listar);
+router.get("/:id/curvas", pacienteController.curvas);
 
 export default router;

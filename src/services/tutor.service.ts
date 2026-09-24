@@ -13,10 +13,10 @@ import {
 import { calcularIMC, aNumero } from "../lib/antropometria";
 import { edadEnDias } from "../lib/fechas";
 import { calcularPuntuacionesZ } from "../lib/oms";
+import { construirCurva } from "../lib/oms";
 
-// Hash de una contraseña que no existe. Se compara contra él cuando el
-// correo no está registrado, para que la respuesta tarde lo mismo en
-// ambos casos y no revele qué correos existen.
+// Hash de una contraseña que no existe.
+// Se compara contra él cuando el correo no está registrado, para que la respuesta tarde lo mismo en ambos casos y no revele qué correos existen.
 const HASH_FALSO = bcrypt.hashSync("contrasena-que-no-existe", 10);
 
 const MENSAJE_CREDENCIALES = "Correo o contraseña incorrectos";
@@ -319,4 +319,37 @@ export const listarMedicionesHijo = async (
       estadoNutricional: null,
     };
   });
+};
+
+const INDICADORES_CURVA = {
+  "talla-edad": { etiqueta: "Talla para la edad", unidad: "cm" },
+  "peso-edad": { etiqueta: "Peso para la edad", unidad: "kg" },
+  "imc-edad": { etiqueta: "IMC para la edad", unidad: "kg/m²" },
+  "peso-talla": { etiqueta: "Peso para la talla", unidad: "kg" },
+} as const;
+
+export type IndicadorCurva = keyof typeof INDICADORES_CURVA;
+
+export const esIndicadorValido = (valor: string): valor is IndicadorCurva =>
+  valor in INDICADORES_CURVA;
+
+export const obtenerCurva = async (
+  pacienteId: number,
+  tutorId: number,
+  indicador: IndicadorCurva,
+) => {
+  const paciente = await prisma.paciente.findFirst({
+    where: { id: pacienteId, tutorId, activo: true },
+    select: {
+      sexo: true,
+      fechaNacimiento: true,
+      mediciones: { orderBy: { fechaConsulta: "asc" } },
+    },
+  });
+
+  if (!paciente) {
+    throw new Error("Paciente no encontrado");
+  }
+
+  return construirCurva(paciente, indicador);
 };

@@ -69,3 +69,39 @@ export const obtener = async (req: RequestAutenticado, res: Response) => {
     return res.status(404).json({ mensaje });
   }
 };
+
+const INDICADORES = [
+  "talla-edad",
+  "peso-edad",
+  "imc-edad",
+  "peso-talla",
+] as const;
+type IndicadorCurva = (typeof INDICADORES)[number];
+
+const esIndicadorValido = (valor: unknown): valor is IndicadorCurva =>
+  typeof valor === "string" && INDICADORES.includes(valor as IndicadorCurva);
+
+export const curvas = async (req: RequestAutenticado, res: Response) => {
+  try {
+    const indicador = req.query.indicador;
+
+    if (!esIndicadorValido(indicador)) {
+      return res.status(400).json({
+        mensaje: `Indicador inválido. Valores permitidos: ${INDICADORES.join(", ")}`,
+      });
+    }
+
+    const curva = await pacienteService.obtenerCurva(
+      Number(req.params.id),
+      req.profesionistaId!,
+      indicador,
+    );
+
+    return res.status(200).json(curva);
+  } catch (error) {
+    const mensaje =
+      error instanceof Error ? error.message : "Error al obtener la curva";
+    const estado = mensaje.includes("no encontrado") ? 404 : 400;
+    return res.status(estado).json({ mensaje });
+  }
+};

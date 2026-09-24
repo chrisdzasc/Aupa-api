@@ -105,3 +105,26 @@ export const medicionesHijo = async (req: RequestTutor, res: Response) => {
     return responderError(res, error, "Error al obtener las mediciones");
   }
 };
+
+export const curvas = async (req: RequestTutor, res: Response) => {
+  try {
+    const indicador = texto(req.query.indicador);
+
+    if (!tutorService.esIndicadorValido(indicador)) {
+      return res.status(400).json({
+        mensaje:
+          "Indicador inválido. Valores permitidos: talla-edad, peso-edad, imc-edad, peso-talla",
+      });
+    }
+
+    const curva = await tutorService.obtenerCurva(
+      leerId(req.params.id),
+      req.tutorId!,
+      indicador,
+    );
+
+    return res.status(200).json(curva);
+  } catch (error) {
+    return responderError(res, error, "Error al obtener la curva");
+  }
+};

@@ -1,6 +1,8 @@
 import { cargarTabla, Indicador, Sexo } from "./tablas";
 import { buscarLMS } from "./buscar";
 import { calcularZ, requiereAjuste } from "./lms";
+import { bandasPorEdad, bandasPorTalla, DatosCurva } from "./curvas";
+import { aFechaISO, edadEnDias, edadEnMeses } from "../fechas";
 
 // Límites de edad de cada referencia, en días
 const DIAS_5_ANIOS = 1856; // último día de los estándares 2006
@@ -141,4 +143,120 @@ export const calcularPuntuacionesZ = (datos: DatosCalculo): PuntuacionesZ => {
   }
 
   return { tallaEdad, pesoEdad, imcEdad, pesoTalla };
+};
+
+interface PacienteCurva {
+  sexo: Sexo;
+  fechaNacimiento: Date;
+  mediciones: { fechaConsulta: Date; pesoKg: unknown; tallaCm: unknown }[];
+}
+
+const ETIQUETAS = {
+  "talla-edad": { etiqueta: "Talla para la edad", unidad: "cm" },
+  "peso-edad": { etiqueta: "Peso para la edad", unidad: "kg" },
+  "imc-edad": { etiqueta: "IMC para la edad", unidad: "kg/m²" },
+  "peso-talla": { etiqueta: "Peso para la talla", unidad: "kg" },
+} as const;
+
+export const construirCurva = (
+  paciente: PacienteCurva,
+  indicador: keyof typeof ETIQUETAS,
+) => {
+  const { sexo, fechaNacimiento, mediciones } = paciente;
+
+  if (mediciones.length === 0) {
+    throw new Error("El paciente no tiene mediciones registradas");
+  }
+
+  const ultima = mediciones[mediciones.length - 1];
+  const edadUltimaDias = edadEnDias(fechaNacimiento, ultima.fechaConsulta);
+  const edadUltimaMeses = edadEnMeses(fechaNacimiento, ultima.fechaConsulta);
+
+  const valorDe = (m: PacienteCurva["mediciones"][number]): number => {
+    const peso = Number(m.pesoKg);
+    const talla = Number(m.tallaCm);
+
+    if (indicador === "talla-edad") return talla;
+    if (indicador === "imc-edad")
+      return Math.round((peso / Math.pow(talla / 100, 2)) * 10) / 10;
+    return peso;
+  };
+
+  let datos: DatosCurva;
+  let referencia: string;
+
+  if (indicador === "peso-talla") {
+    if (edadUltimaDias > DIAS_5_ANIOS) {
+      throw new Error(
+        "El indicador peso para la talla solo aplica hasta los 5 años",
+      );
+    }
+
+    const tallaUltima = Number(ultima.tallaCm);
+    const archivo =
+      edadUltimaDias < DIAS_2_ANIOS ? "peso-longitud-0-2" : "peso-talla-2-5";
+    datos = bandasPorTalla(archivo, sexo, tallaUltima);
+    referencia = "OMS 2006";
+  } else {
+    const hastaMeses = edadUltimaMeses + 6;
+    const esMenorDe5 = edadUltimaDias <= DIAS_5_ANIOS;
+
+    if (indicador === "peso-edad" && edadUltimaDias > DIAS_10_ANIOS) {
+      throw new Error(
+        "El indicador peso para la edad solo aplica hasta los 10 años",
+      );
+    }
+
+    const archivo = esMenorDe5
+      ? `${indicador}-0-5`
+      : indicador === "peso-edad"
+        ? "peso-edad-5-10"
+        : `${indicador}-5-19`;
+
+    datos = bandasPorEdad(indicador as Indicador, archivo, sexo, hastaMeses);
+    referencia = esMenorDe5 ? "OMS 2006" : "OMS 2007";
+  }
+
+  const puntos = mediciones
+    .map((m) => {
+      const z = calcularPuntuacionesZ({
+        sexo,
+        edadDias: edadEnDias(fechaNacimiento, m.fechaConsulta),
+        pesoKg: Number(m.pesoKg),
+        tallaCm: Number(m.tallaCm),
+      });
+
+      const zIndicador = {
+        "talla-edad": z.tallaEdad,
+        "peso-edad": z.pesoEdad,
+        "imc-edad": z.imcEdad,
+        "peso-talla": z.pesoTalla,
+      }[indicador];
+
+      const x =
+        indicador === "peso-talla"
+          ? Number(m.tallaCm)
+          : Math.round(
+              (edadEnDias(fechaNacimiento, m.fechaConsulta) / 30.4375) * 10,
+            ) / 10;
+
+      return {
+        x,
+        valor: valorDe(m),
+        z: zIndicador,
+        fechaConsulta: aFechaISO(m.fechaConsulta),
+      };
+    })
+    .filter((p) => p.x >= datos.eje.min && p.x <= datos.eje.max);
+
+  return {
+    indicador,
+    etiqueta: ETIQUETAS[indicador].etiqueta,
+    referencia,
+    sexo,
+    eje: datos.eje,
+    unidadValor: ETIQUETAS[indicador].unidad,
+    bandas: datos.bandas,
+    paciente: puntos,
+  };
 };
