@@ -78,6 +78,17 @@ const TABLAS: Definicion[] = [
     filas: 1857,
     sexo: "M",
   },
+  {
+    archivo: "perimetro-cefalico-edad-0-5",
+    indicador: "perimetro-cefalico-edad",
+    referencia: "OMS 2006",
+    indice: "dia",
+    columnaIndice: "Day",
+    min: 0,
+    max: 1856,
+    filas: 1857,
+    sexo: "M",
+  },
   // Peso según la talla: acostado hasta los 2 años, de pie después
   {
     archivo: "peso-longitud-0-2",

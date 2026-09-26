@@ -15,6 +15,7 @@ export interface DatosCalculo {
   edadDias: number;
   pesoKg: number;
   tallaCm: number;
+  perimetroCefalicoCm?: number | null;
 }
 
 export interface PuntuacionesZ {
@@ -22,6 +23,7 @@ export interface PuntuacionesZ {
   pesoEdad: number | null;
   imcEdad: number | null;
   pesoTalla: number | null;
+  perimetroCefalicoEdad: number | null;
 }
 
 // Redondea a dos decimales
@@ -142,13 +144,34 @@ export const calcularPuntuacionesZ = (datos: DatosCalculo): PuntuacionesZ => {
     );
   }
 
-  return { tallaEdad, pesoEdad, imcEdad, pesoTalla };
+  // Perímetro cefálico para la edad: la OMS lo publica hasta los 5 años, pero en la práctica solo se mide de rutina en los primeros 2 años
+  let perimetroCefalicoEdad: number | null = null;
+  if (
+    datos.perimetroCefalicoCm != null &&
+    datos.perimetroCefalicoCm > 0 &&
+    edadDias < DIAS_2_ANIOS
+  ) {
+    perimetroCefalicoEdad = calcularIndicador(
+      "perimetro-cefalico-edad",
+      "perimetro-cefalico-edad-0-5",
+      sexo,
+      edadDias,
+      datos.perimetroCefalicoCm,
+    );
+  }
+
+  return { tallaEdad, pesoEdad, imcEdad, pesoTalla, perimetroCefalicoEdad };
 };
 
 interface PacienteCurva {
   sexo: Sexo;
   fechaNacimiento: Date;
-  mediciones: { fechaConsulta: Date; pesoKg: unknown; tallaCm: unknown }[];
+  mediciones: {
+    fechaConsulta: Date;
+    pesoKg: unknown;
+    tallaCm: unknown;
+    perimetroCefalicoCm?: unknown;
+  }[];
 }
 
 const ETIQUETAS = {
@@ -156,6 +179,10 @@ const ETIQUETAS = {
   "peso-edad": { etiqueta: "Peso para la edad", unidad: "kg" },
   "imc-edad": { etiqueta: "IMC para la edad", unidad: "kg/m²" },
   "peso-talla": { etiqueta: "Peso para la talla", unidad: "kg" },
+  "perimetro-cefalico-edad": {
+    etiqueta: "Perímetro cefálico para la edad",
+    unidad: "cm",
+  },
 } as const;
 
 export const construirCurva = (
@@ -177,6 +204,8 @@ export const construirCurva = (
     const talla = Number(m.tallaCm);
 
     if (indicador === "talla-edad") return talla;
+    if (indicador === "perimetro-cefalico-edad")
+      return Number(m.perimetroCefalicoCm);
     if (indicador === "imc-edad")
       return Math.round((peso / Math.pow(talla / 100, 2)) * 10) / 10;
     return peso;
@@ -198,13 +227,21 @@ export const construirCurva = (
     datos = bandasPorTalla(archivo, sexo, tallaUltima);
     referencia = "OMS 2006";
   } else {
-    const hastaMeses = edadUltimaMeses + 6;
+    const hastaMeses =
+      indicador === "perimetro-cefalico-edad" ? 24 : edadUltimaMeses + 6;
     const esMenorDe5 = edadUltimaDias <= DIAS_5_ANIOS;
 
     if (indicador === "peso-edad" && edadUltimaDias > DIAS_10_ANIOS) {
       throw new Error(
         "El indicador peso para la edad solo aplica hasta los 10 años",
       );
+    }
+
+    if (
+      indicador === "perimetro-cefalico-edad" &&
+      edadUltimaDias >= DIAS_2_ANIOS
+    ) {
+      throw new Error("El perímetro cefálico solo se evalúa hasta los 2 años");
     }
 
     const archivo = esMenorDe5
@@ -224,6 +261,8 @@ export const construirCurva = (
         edadDias: edadEnDias(fechaNacimiento, m.fechaConsulta),
         pesoKg: Number(m.pesoKg),
         tallaCm: Number(m.tallaCm),
+        perimetroCefalicoCm:
+          m.perimetroCefalicoCm != null ? Number(m.perimetroCefalicoCm) : null,
       });
 
       const zIndicador = {
@@ -231,6 +270,7 @@ export const construirCurva = (
         "peso-edad": z.pesoEdad,
         "imc-edad": z.imcEdad,
         "peso-talla": z.pesoTalla,
+        "perimetro-cefalico-edad": z.perimetroCefalicoEdad,
       }[indicador];
 
       const x =
@@ -247,7 +287,8 @@ export const construirCurva = (
         fechaConsulta: aFechaISO(m.fechaConsulta),
       };
     })
-    .filter((p) => p.x >= datos.eje.min && p.x <= datos.eje.max);
+    .filter((p) => p.x >= datos.eje.min && p.x <= datos.eje.max)
+    .filter((p) => Number.isFinite(p.valor));
 
   return {
     indicador,

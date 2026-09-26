@@ -292,7 +292,12 @@ export const obtenerPaciente = async (id: number, profesionistaId: number) => {
 export const obtenerCurva = async (
   pacienteId: number,
   profesionistaId: number,
-  indicador: "talla-edad" | "peso-edad" | "imc-edad" | "peso-talla",
+  indicador:
+    | "talla-edad"
+    | "peso-edad"
+    | "imc-edad"
+    | "peso-talla"
+    | "perimetro-cefalico-edad",
 ) => {
   const paciente = await prisma.paciente.findFirst({
     where: { id: pacienteId, profesionistaId },

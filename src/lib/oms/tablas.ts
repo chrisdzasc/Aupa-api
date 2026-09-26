@@ -7,7 +7,8 @@ export type Indicador =
   | "peso-edad"
   | "imc-edad"
   | "peso-longitud"
-  | "peso-talla";
+  | "peso-talla"
+  | "perimetro-cefalico-edad";
 
 export type TipoIndice = "dia" | "mes" | "longitud" | "talla";
 

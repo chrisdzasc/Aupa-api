@@ -44,5 +44,6 @@ export const calcularZ = (
   return -3 + (x - sd3neg) / (sd2neg - sd3neg);
 };
 
+// El ajuste no aplica a los indicadores de distribución simétrica
 export const requiereAjuste = (indicador: string): boolean =>
-  indicador !== "talla-edad";
+  indicador !== "talla-edad" && indicador !== "perimetro-cefalico-edad";

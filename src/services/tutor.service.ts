@@ -243,6 +243,7 @@ export const obtenerHijo = async (pacienteId: number, tutorId: number) => {
             edadDias: edadEnDias(p.fechaNacimiento, ultima.fechaConsulta),
             pesoKg,
             tallaCm,
+            perimetroCefalicoCm: aNumero(ultima.perimetroCefalicoCm),
           });
 
           return {
@@ -257,6 +258,7 @@ export const obtenerHijo = async (pacienteId: number, tutorId: number) => {
               tallaEdad: z.tallaEdad,
               imcEdad: z.imcEdad,
               pesoTalla: z.pesoTalla,
+              perimetroCefalicoEdad: z.perimetroCefalicoEdad,
             },
             estadoNutricional: null,
           };
@@ -300,6 +302,7 @@ export const listarMedicionesHijo = async (
       edadDias: edadEnDias(paciente.fechaNacimiento, m.fechaConsulta),
       pesoKg,
       tallaCm,
+      perimetroCefalicoCm: aNumero(m.perimetroCefalicoCm),
     });
 
     return {
@@ -315,6 +318,7 @@ export const listarMedicionesHijo = async (
         tallaEdad: z.tallaEdad,
         imcEdad: z.imcEdad,
         pesoTalla: z.pesoTalla,
+        perimetroCefalicoEdad: z.perimetroCefalicoEdad,
       },
       estadoNutricional: null,
     };
@@ -326,6 +330,10 @@ const INDICADORES_CURVA = {
   "peso-edad": { etiqueta: "Peso para la edad", unidad: "kg" },
   "imc-edad": { etiqueta: "IMC para la edad", unidad: "kg/m²" },
   "peso-talla": { etiqueta: "Peso para la talla", unidad: "kg" },
+  "perimetro-cefalico-edad": {
+    etiqueta: "Perímetro cefálico para la edad",
+    unidad: "cm",
+  },
 } as const;
 
 export type IndicadorCurva = keyof typeof INDICADORES_CURVA;

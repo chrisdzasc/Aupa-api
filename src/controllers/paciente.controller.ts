@@ -75,7 +75,9 @@ const INDICADORES = [
   "peso-edad",
   "imc-edad",
   "peso-talla",
+  "perimetro-cefalico-edad",
 ] as const;
+
 type IndicadorCurva = (typeof INDICADORES)[number];
 
 const esIndicadorValido = (valor: unknown): valor is IndicadorCurva =>

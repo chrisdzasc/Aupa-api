@@ -16,7 +16,12 @@ export const aNumero = (valor: { toString(): string } | null): number | null =>
 // Calcula las puntuaciones Z de una medición a partir de los datos del paciente.
 export const puntuacionesDeMedicion = (
   paciente: { sexo: "M" | "F"; fechaNacimiento: Date },
-  medicion: { fechaConsulta: Date; pesoKg: unknown; tallaCm: unknown },
+  medicion: {
+    fechaConsulta: Date;
+    pesoKg: unknown;
+    tallaCm: unknown;
+    perimetroCefalicoCm?: unknown;
+  },
 ) => {
   const pesoKg = Number(medicion.pesoKg);
   const tallaCm = Number(medicion.tallaCm);
@@ -26,6 +31,10 @@ export const puntuacionesDeMedicion = (
     edadDias: edadEnDias(paciente.fechaNacimiento, medicion.fechaConsulta),
     pesoKg,
     tallaCm,
+    perimetroCefalicoCm:
+      medicion.perimetroCefalicoCm != null
+        ? Number(medicion.perimetroCefalicoCm)
+        : null,
   });
 
   return {
@@ -33,5 +42,6 @@ export const puntuacionesDeMedicion = (
     tallaEdad: z.tallaEdad,
     imcEdad: z.imcEdad,
     pesoTalla: z.pesoTalla,
+    perimetroCefalicoEdad: z.perimetroCefalicoEdad,
   };
 };
