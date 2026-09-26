@@ -2,6 +2,7 @@ import { Router } from "express";
 import { verificarToken } from "../middlewares/auth.middleware";
 import * as pacienteController from "../controllers/paciente.controller";
 import * as medicionController from "../controllers/medicion.controller";
+import * as citaController from "../controllers/cita.controller";
 
 const router = Router();
 
@@ -16,5 +17,7 @@ router.get("/:id", pacienteController.obtener);
 router.post("/:id/mediciones", medicionController.crear);
 router.get("/:id/mediciones", medicionController.listar);
 router.get("/:id/curvas", pacienteController.curvas);
+
+router.get("/:id/citas", citaController.listarPorPaciente);
 
 export default router;
