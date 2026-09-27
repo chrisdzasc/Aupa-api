@@ -2,7 +2,7 @@ import prisma from "../lib/prisma";
 import { Sexo, TipoParto, Parentesco, TipoAlerta } from "@prisma/client";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import { aFechaISO } from "../lib/fechas";
+import { aFechaISO, aFechaMexico, aHoraMexico } from "../lib/fechas";
 import { normalizarEmail } from "../lib/texto";
 import { puntuacionesDeMedicion } from "../lib/antropometria";
 import { construirCurva } from "../lib/oms";
@@ -271,6 +271,12 @@ export const obtenerPaciente = async (id: number, profesionistaId: number) => {
       alertas: true,
       antecedentesFamiliares: true,
       mediciones: { orderBy: { fechaConsulta: "desc" } },
+      citas: {
+        where: { estado: "PENDIENTE", fechaHora: { gte: new Date() } },
+        orderBy: { fechaHora: "asc" },
+        take: 1,
+        select: { id: true, fechaHora: true, notas: true },
+      },
     },
   });
 
@@ -278,14 +284,25 @@ export const obtenerPaciente = async (id: number, profesionistaId: number) => {
     throw new Error("Paciente no encontrado");
   }
 
+  const { citas, ...datosPaciente } = paciente;
+  const proxima = citas[0];
+
   return {
-    ...paciente,
+    ...datosPaciente,
     fechaNacimiento: aFechaISO(paciente.fechaNacimiento),
     mediciones: paciente.mediciones.map((medicion) => ({
       ...medicion,
       fechaConsulta: aFechaISO(medicion.fechaConsulta),
       puntuacionZ: puntuacionesDeMedicion(paciente, medicion),
     })),
+    proximaCita: proxima
+      ? {
+          id: proxima.id,
+          fecha: aFechaMexico(proxima.fechaHora),
+          hora: aHoraMexico(proxima.fechaHora),
+          notas: proxima.notas,
+        }
+      : null,
   };
 };
 
