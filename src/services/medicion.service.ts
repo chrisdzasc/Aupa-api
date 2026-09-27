@@ -112,6 +112,27 @@ const verificarFechaDisponible = async (
   }
 };
 
+/* Marca como completada la cita pendiente del paciente en esa fecha, si existe. La medición es evidencia de que la consulta ocurrió. */
+const completarCitaDelDia = async (
+  pacienteId: number,
+  profesionistaId: number,
+  fechaConsulta: Date,
+) => {
+  // La fecha de consulta es medianoche UTC.
+  const inicio = new Date(fechaConsulta.getTime() + 6 * 60 * 60 * 1000);
+  const fin = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+
+  await prisma.cita.updateMany({
+    where: {
+      pacienteId,
+      profesionistaId,
+      estado: "PENDIENTE",
+      fechaHora: { gte: inicio, lt: fin },
+    },
+    data: { estado: "COMPLETADA" },
+  });
+};
+
 // Crear una medición para un paciente del profesionista
 export const crearMedicion = async (
   pacienteId: number,
@@ -142,6 +163,9 @@ export const crearMedicion = async (
       notas: datos.notas,
     },
   });
+
+  // Si había una cita pendiente ese día, se marca como completada.
+  await completarCitaDelDia(pacienteId, profesionistaId, fechaConsulta);
 
   return formatearMedicion(medicion, paciente);
 };

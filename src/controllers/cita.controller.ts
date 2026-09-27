@@ -135,3 +135,21 @@ export const eliminar = async (req: RequestAutenticado, res: Response) => {
     return responderError(res, error, "Error al eliminar la cita");
   }
 };
+
+export const resumen = async (req: RequestAutenticado, res: Response) => {
+  try {
+    const fecha = texto(req.query.fecha);
+
+    if (!fecha) {
+      return res
+        .status(400)
+        .json({ mensaje: "El parámetro fecha es obligatorio (YYYY-MM-DD)" });
+    }
+
+    const datos = await citaService.resumenDelDia(req.profesionistaId!, fecha);
+
+    return res.status(200).json(datos);
+  } catch (error) {
+    return responderError(res, error, "Error al obtener el resumen");
+  }
+};

@@ -8,6 +8,7 @@ router.use(verificarToken);
 
 router.post("/", citaController.crear);
 router.get("/", citaController.listar);
+router.get("/resumen", citaController.resumen);
 router.put("/:id", citaController.editar);
 router.patch("/:id/estado", citaController.actualizarEstado);
 router.delete("/:id", citaController.eliminar);

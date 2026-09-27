@@ -146,7 +146,9 @@ export const listarCitas = async (
     },
     orderBy: { fechaHora: "asc" },
     include: {
-      paciente: { select: { id: true, nombre: true, numeroExpediente: true } },
+      paciente: {
+        select: { id: true, nombre: true, numeroExpediente: true, sexo: true },
+      },
     },
   });
 
@@ -226,4 +228,28 @@ export const cambiarEstado = async (
 export const eliminarCita = async (id: number, profesionistaId: number) => {
   await buscarCitaDelProfesionista(id, profesionistaId);
   await prisma.cita.delete({ where: { id } });
+};
+
+/* Resumen de la agenda de un día, para las tarjetas del dashboard. Las citas cuya hora ya pasó dejan de contar como pendientes, aunque no se hayan marcado como completadas.*/
+export const resumenDelDia = async (profesionistaId: number, fecha: string) => {
+  const inicio = aMomento(fecha, "00:00");
+  const fin = aMomento(fecha, "23:59");
+
+  const citas = await prisma.cita.findMany({
+    where: {
+      profesionistaId,
+      fechaHora: { gte: inicio, lte: fin },
+      estado: { not: "CANCELADA" },
+    },
+    select: { fechaHora: true, estado: true },
+  });
+
+  const ahora = new Date();
+
+  return {
+    total: citas.length,
+    pendientes: citas.filter(
+      (c) => c.estado === "PENDIENTE" && c.fechaHora > ahora,
+    ).length,
+  };
 };
