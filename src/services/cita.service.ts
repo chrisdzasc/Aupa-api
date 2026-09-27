@@ -195,8 +195,8 @@ export const editarCita = async (
 
 const ESTADOS_VALIDOS: EstadoCita[] = [
   "PENDIENTE",
-  "EN_CURSO",
   "COMPLETADA",
+  "NO_ASISTIO",
   "CANCELADA",
 ];
 

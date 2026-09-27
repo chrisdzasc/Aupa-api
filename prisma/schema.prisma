@@ -196,7 +196,7 @@ enum TipoAlerta {
 
 enum EstadoCita {
   PENDIENTE
-  EN_CURSO
   COMPLETADA
+  NO_ASISTIO
   CANCELADA
 }
