@@ -37,6 +37,9 @@ const formatearCita = <
   };
 };
 
+const PRIMER_HORARIO = 8 * 60;
+const ULTIMO_HORARIO = 20 * 60 + 30;
+
 const validarDatos = (datos: DatosCita) => {
   if (!datos.fecha || !datos.hora) {
     throw new Error("La fecha y la hora son obligatorias");
@@ -52,6 +55,19 @@ const validarDatos = (datos: DatosCita) => {
 
   if (datos.notas && datos.notas.length > 300) {
     throw new Error("Las notas no pueden exceder los 300 caracteres");
+  }
+
+  const [h, m] = datos.hora.split(":").map(Number);
+  const minutos = h * 60 + m;
+
+  if (
+    (m !== 0 && m !== 30) ||
+    minutos < PRIMER_HORARIO ||
+    minutos > ULTIMO_HORARIO
+  ) {
+    throw new Error(
+      "La hora debe estar entre 08:00 y 20:30, en punto o y media",
+    );
   }
 };
 
@@ -91,6 +107,37 @@ const verificarHorarioLibre = async (
   }
 };
 
+// No se agenda ni se reagenda hacia un momento que ya pasó
+const verificarMomentoFuturo = (fechaHora: Date) => {
+  if (fechaHora <= new Date()) {
+    throw new Error("No se puede agendar en una fecha u hora que ya pasó");
+  }
+};
+
+// Un paciente tiene como máximo una cita por día.
+const verificarDiaLibrePaciente = async (
+  pacienteId: number,
+  fecha: string,
+  excluirId?: number,
+) => {
+  const inicio = aMomento(fecha, "00:00");
+  const fin = new Date(inicio.getTime() + 24 * 60 * 60 * 1000);
+
+  const existente = await prisma.cita.findFirst({
+    where: {
+      pacienteId,
+      fechaHora: { gte: inicio, lt: fin },
+      estado: { in: ["PENDIENTE", "COMPLETADA"] },
+      ...(excluirId ? { id: { not: excluirId } } : {}),
+    },
+    select: { id: true },
+  });
+
+  if (existente) {
+    throw new Error("Ya tienes una cita con este paciente ese día");
+  }
+};
+
 const buscarCitaDelProfesionista = async (
   id: number,
   profesionistaId: number,
@@ -111,6 +158,8 @@ export const crearCita = async (profesionistaId: number, datos: DatosCita) => {
   await verificarPaciente(datos.pacienteId, profesionistaId);
 
   const fechaHora = aMomento(datos.fecha, datos.hora);
+  verificarMomentoFuturo(fechaHora);
+  await verificarDiaLibrePaciente(datos.pacienteId, datos.fecha);
   await verificarHorarioLibre(profesionistaId, fechaHora);
 
   const cita = await prisma.cita.create({
@@ -176,15 +225,23 @@ export const editarCita = async (
   profesionistaId: number,
   datos: Omit<DatosCita, "pacienteId">,
 ) => {
-  await buscarCitaDelProfesionista(id, profesionistaId);
+  const actual = await buscarCitaDelProfesionista(id, profesionistaId);
   validarDatos({ ...datos, pacienteId: 0 });
 
   const fechaHora = aMomento(datos.fecha, datos.hora);
+  verificarMomentoFuturo(fechaHora);
+  await verificarDiaLibrePaciente(actual.pacienteId, datos.fecha, id);
   await verificarHorarioLibre(profesionistaId, fechaHora, id);
 
   const cita = await prisma.cita.update({
     where: { id },
-    data: { fechaHora, notas: datos.notas?.trim() || null },
+    data: {
+      fechaHora,
+      // Solo se tocan las notas si vinieron en la petición
+      ...(datos.notas !== undefined
+        ? { notas: datos.notas.trim() || null }
+        : {}),
+    },
     include: {
       paciente: { select: { nombre: true, numeroExpediente: true } },
     },

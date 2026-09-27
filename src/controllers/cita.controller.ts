@@ -92,7 +92,7 @@ export const editar = async (req: RequestAutenticado, res: Response) => {
       {
         fecha: texto(req.body.fecha),
         hora: texto(req.body.hora),
-        notas: texto(req.body.notas) || undefined,
+        notas: typeof req.body.notas === "string" ? req.body.notas : undefined,
       },
     );
 
