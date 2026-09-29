@@ -226,6 +226,11 @@ export const editarCita = async (
   datos: Omit<DatosCita, "pacienteId">,
 ) => {
   const actual = await buscarCitaDelProfesionista(id, profesionistaId);
+
+  if (actual.estado !== "PENDIENTE") {
+    throw new Error("Solo se pueden reagendar citas pendientes");
+  }
+
   validarDatos({ ...datos, pacienteId: 0 });
 
   const fechaHora = aMomento(datos.fecha, datos.hora);
@@ -250,12 +255,22 @@ export const editarCita = async (
   return formatearCita(cita);
 };
 
-const ESTADOS_VALIDOS: EstadoCita[] = [
-  "PENDIENTE",
-  "COMPLETADA",
-  "NO_ASISTIO",
-  "CANCELADA",
-];
+/* A qué estados puede pasar una cita desde cada estado. Una cancelada ya no cambia: si se retoma, se agenda una cita nueva. */
+const TRANSICIONES: Record<EstadoCita, EstadoCita[]> = {
+  PENDIENTE: ["COMPLETADA", "NO_ASISTIO", "CANCELADA"],
+  NO_ASISTIO: ["COMPLETADA"],
+  COMPLETADA: ["NO_ASISTIO"],
+  CANCELADA: [],
+};
+
+const ESTADOS_VALIDOS = Object.keys(TRANSICIONES) as EstadoCita[];
+
+const ETIQUETAS: Record<EstadoCita, string> = {
+  PENDIENTE: "pendiente",
+  COMPLETADA: "completada",
+  NO_ASISTIO: "marcada como inasistencia",
+  CANCELADA: "cancelada",
+};
 
 export const cambiarEstado = async (
   id: number,
@@ -268,11 +283,29 @@ export const cambiarEstado = async (
     );
   }
 
-  await buscarCitaDelProfesionista(id, profesionistaId);
+  const actual = await buscarCitaDelProfesionista(id, profesionistaId);
+  const nuevo = estado as EstadoCita;
+
+  if (!TRANSICIONES[actual.estado].includes(nuevo)) {
+    throw new Error(
+      `Una cita ${ETIQUETAS[actual.estado]} no puede quedar ${ETIQUETAS[nuevo]}`,
+    );
+  }
+
+  // La asistencia se registra a partir del día de la cita, no antes
+  const esAsistencia = nuevo === "COMPLETADA" || nuevo === "NO_ASISTIO";
+  if (
+    esAsistencia &&
+    aFechaMexico(actual.fechaHora) > aFechaMexico(new Date())
+  ) {
+    throw new Error(
+      "La asistencia solo se registra a partir del día de la cita",
+    );
+  }
 
   const cita = await prisma.cita.update({
     where: { id },
-    data: { estado: estado as EstadoCita },
+    data: { estado: nuevo },
     include: {
       paciente: { select: { nombre: true, numeroExpediente: true } },
     },
