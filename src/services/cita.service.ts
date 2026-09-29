@@ -153,6 +153,20 @@ const buscarCitaDelProfesionista = async (
   return cita;
 };
 
+// Las citas pendientes de días anteriores pasan a inasistencia.
+export const resolverCitasVencidas = async (profesionistaId: number) => {
+  const inicioDeHoy = aMomento(aFechaMexico(new Date()), "00:00");
+
+  await prisma.cita.updateMany({
+    where: {
+      profesionistaId,
+      estado: "PENDIENTE",
+      fechaHora: { lt: inicioDeHoy },
+    },
+    data: { estado: "NO_ASISTIO" },
+  });
+};
+
 export const crearCita = async (profesionistaId: number, datos: DatosCita) => {
   validarDatos(datos);
   await verificarPaciente(datos.pacienteId, profesionistaId);
@@ -184,6 +198,7 @@ export const listarCitas = async (
   hasta: string,
   incluirTodas = false,
 ) => {
+  await resolverCitasVencidas(profesionistaId);
   const inicio = aMomento(desde, "00:00");
   const fin = aMomento(hasta, "23:59");
 
@@ -210,6 +225,7 @@ export const listarCitasPaciente = async (
   profesionistaId: number,
 ) => {
   await verificarPaciente(pacienteId, profesionistaId);
+  await resolverCitasVencidas(profesionistaId);
 
   const citas = await prisma.cita.findMany({
     where: { pacienteId },
@@ -283,6 +299,8 @@ export const cambiarEstado = async (
     );
   }
 
+  await resolverCitasVencidas(profesionistaId);
+
   const actual = await buscarCitaDelProfesionista(id, profesionistaId);
   const nuevo = estado as EstadoCita;
 
@@ -320,8 +338,9 @@ export const eliminarCita = async (id: number, profesionistaId: number) => {
   await prisma.cita.delete({ where: { id } });
 };
 
-/* Resumen de la agenda de un día, para las tarjetas del dashboard. Las citas cuya hora ya pasó dejan de contar como pendientes, aunque no se hayan marcado como completadas.*/
+// Resumen de la agenda de un día, para las tarjetas del dashboard. Las citas de hoy cuya hora ya pasó dejan de contar como pendientes; las de días anteriores ya quedaron resueltas como inasistencia.
 export const resumenDelDia = async (profesionistaId: number, fecha: string) => {
+  await resolverCitasVencidas(profesionistaId);
   const inicio = aMomento(fecha, "00:00");
   const fin = aMomento(fecha, "23:59");
 
