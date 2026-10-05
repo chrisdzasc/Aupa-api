@@ -361,3 +361,28 @@ export const obtenerCurva = async (
 
   return construirCurva(paciente, indicador);
 };
+
+// Próximas citas de todos los hijos del tutor, solo futuras y pendientes
+export const listarCitasTutor = async (tutorId: number) => {
+  const citas = await prisma.cita.findMany({
+    where: {
+      estado: "PENDIENTE",
+      fechaHora: { gte: new Date() },
+      paciente: { tutorId, activo: true },
+    },
+    orderBy: { fechaHora: "asc" },
+    include: {
+      paciente: { select: { id: true, nombre: true } },
+      profesionista: { select: { nombre: true } },
+    },
+  });
+
+  return citas.map((c) => ({
+    id: c.id,
+    pacienteId: c.paciente.id,
+    paciente: c.paciente.nombre,
+    fecha: aFechaMexico(c.fechaHora),
+    hora: aHoraMexico(c.fechaHora),
+    nutriologo: c.profesionista.nombre,
+  }));
+};

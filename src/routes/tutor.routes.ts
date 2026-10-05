@@ -39,5 +39,6 @@ router.get(
   ...tutorActivo,
   tutorController.medicionesHijo,
 );
+router.get("/citas", ...tutorActivo, tutorController.citas);
 
 export default router;

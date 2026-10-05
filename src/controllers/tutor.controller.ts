@@ -128,3 +128,12 @@ export const curvas = async (req: RequestTutor, res: Response) => {
     return responderError(res, error, "Error al obtener la curva");
   }
 };
+
+export const citas = async (req: RequestTutor, res: Response) => {
+  try {
+    const citas = await tutorService.listarCitasTutor(req.tutorId!);
+    return res.status(200).json({ citas });
+  } catch (error) {
+    return responderError(res, error, "Error al obtener las citas");
+  }
+};
