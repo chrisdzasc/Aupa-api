@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "tablas:oms": "ts-node -T scripts/convertir-tablas-oms.ts",
-    "oms:validar": "ts-node -T scripts/validar-oms.ts"
+    "oms:validar": "ts-node -T scripts/validar-oms.ts",
+    "alimentos:sembrar": "ts-node -T scripts/sembrar-alimentos.ts"
   },
   "keywords": [],
   "author": "",
