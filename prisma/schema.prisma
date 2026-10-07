@@ -86,6 +86,7 @@ model Paciente {
   citas                  Cita[]
   alertas                AlertaMedica[]
   antecedentesFamiliares AntecedenteFamiliar[]
+  registrosAlimento      RegistroAlimento[]
 
   @@unique([profesionistaId, numeroExpediente])
   @@index([profesionistaId])
@@ -167,6 +168,45 @@ model Cita {
   @@index([profesionistaId])
 }
 
+// Catálogo de alimentos para el checklist de alimentación complementaria.
+model Alimento {
+  id              Int               @id @default(autoincrement())
+  nombre          String            @unique @db.VarChar(80)
+  categoria       CategoriaAlimento
+  edadMinimaMeses Int
+  esAlergenoComun Boolean           @default(false)
+
+  activo Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registros RegistroAlimento[]
+
+  @@index([edadMinimaMeses])
+}
+
+// Un renglón por cada vez que se le ofrece un alimento a un niño. Se guarda cada intento, y no solo el estado final ya que un alimento suele necesitar varios intentos antes de aceptarse.
+model RegistroAlimento {
+  id                  Int        @id @default(autoincrement())
+  fecha               DateTime   @db.Date
+  aceptacion          Aceptacion
+  tuvoReaccion        Boolean    @default(false)
+  descripcionReaccion String?    @db.VarChar(300)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pacienteId Int
+  paciente   Paciente @relation(fields: [pacienteId], references: [id])
+
+  alimentoId Int
+  alimento   Alimento @relation(fields: [alimentoId], references: [id])
+
+  @@index([pacienteId, alimentoId])
+  @@index([pacienteId, fecha])
+}
+
 // ============================================
 // ENUMERADORES
 // ============================================
@@ -199,4 +239,21 @@ enum EstadoCita {
   COMPLETADA
   NO_ASISTIO
   CANCELADA
+}
+
+enum CategoriaAlimento {
+  FRUTA
+  VERDURA
+  CEREAL_TUBERCULO
+  LEGUMINOSA
+  ORIGEN_ANIMAL
+  LACTEO
+  GRASA_OLEAGINOSA
+}
+
+// Cómo le fue al niño con el alimento.
+enum Aceptacion {
+  ACEPTADO
+  PARCIAL
+  RECHAZADO
 }
