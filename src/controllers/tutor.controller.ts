@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { RequestTutor } from "../middlewares/auth.middleware";
 import * as tutorService from "../services/tutor.service";
+import * as alimentoService from "../services/alimento.service";
 
 // Traduce el mensaje del error a un código HTTP
 const responderError = (res: Response, error: unknown, porDefecto: string) => {
@@ -135,5 +136,39 @@ export const citas = async (req: RequestTutor, res: Response) => {
     return res.status(200).json({ citas });
   } catch (error) {
     return responderError(res, error, "Error al obtener las citas");
+  }
+};
+
+export const checklistAlimentos = async (req: RequestTutor, res: Response) => {
+  try {
+    const datos = await alimentoService.obtenerChecklist(
+      leerId(req.params.id),
+      req.tutorId!,
+    );
+    return res.status(200).json(datos);
+  } catch (error) {
+    return responderError(res, error, "Error al obtener el checklist");
+  }
+};
+
+export const registrarAlimento = async (req: RequestTutor, res: Response) => {
+  try {
+    const registro = await alimentoService.registrarIntento(
+      leerId(req.params.id),
+      req.tutorId!,
+      {
+        alimentoId: Number(req.body.alimentoId),
+        fecha: texto(req.body.fecha) || undefined,
+        aceptacion: texto(req.body.aceptacion),
+        tuvoReaccion: req.body.tuvoReaccion === true,
+        descripcionReaccion: texto(req.body.descripcionReaccion) || undefined,
+      },
+    );
+
+    return res
+      .status(201)
+      .json({ mensaje: "Alimento registrado correctamente", registro });
+  } catch (error) {
+    return responderError(res, error, "Error al registrar el alimento");
   }
 };

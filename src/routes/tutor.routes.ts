@@ -39,6 +39,19 @@ router.get(
   ...tutorActivo,
   tutorController.medicionesHijo,
 );
+
+// Checklist de alimentación complementaria
+router.get(
+  "/pacientes/:id/alimentos",
+  ...tutorActivo,
+  tutorController.checklistAlimentos,
+);
+router.post(
+  "/pacientes/:id/alimentos",
+  ...tutorActivo,
+  tutorController.registrarAlimento,
+);
+
 router.get("/citas", ...tutorActivo, tutorController.citas);
 
 export default router;
