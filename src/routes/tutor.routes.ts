@@ -14,8 +14,7 @@ const tutorActivo = [verificarTokenTutor, exigirPasswordCambiada];
 // Pública
 router.post("/auth/login", limitarLogin, tutorController.login);
 
-// Requiere token de tutor, pero NO exige haber cambiado la contraseña,
-// porque esta es justamente la ruta para cambiarla
+// Requiere token de tutor, pero NO exige haber cambiado la contraseña, porque esta es justamente la ruta para cambiarla
 router.post(
   "/auth/cambiar-password",
   verificarTokenTutor,
@@ -46,10 +45,17 @@ router.get(
   ...tutorActivo,
   tutorController.checklistAlimentos,
 );
+
 router.post(
   "/pacientes/:id/alimentos",
   ...tutorActivo,
   tutorController.registrarAlimento,
+);
+
+router.get(
+  "/pacientes/:id/alimentos/:alimentoId",
+  ...tutorActivo,
+  tutorController.detalleAlimento,
 );
 
 router.get("/citas", ...tutorActivo, tutorController.citas);

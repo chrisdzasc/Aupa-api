@@ -198,3 +198,57 @@ export const registrarIntento = async (
     vecesOfrecido,
   };
 };
+
+// Todos los intentos de un alimento con un niño, del más reciente al más antiguo.
+export const obtenerDetalleAlimento = async (
+  pacienteId: number,
+  tutorId: number,
+  alimentoId: number,
+) => {
+  const paciente = await buscarPacienteDelTutor(pacienteId, tutorId);
+
+  const alimento = await prisma.alimento.findUnique({
+    where: { id: alimentoId },
+    select: {
+      id: true,
+      nombre: true,
+      categoria: true,
+      edadMinimaMeses: true,
+      esAlergenoComun: true,
+    },
+  });
+
+  if (!alimento) {
+    throw new Error("Alimento no encontrado");
+  }
+
+  const registros = await prisma.registroAlimento.findMany({
+    where: { pacienteId, alimentoId },
+    orderBy: [{ fecha: "desc" }, { id: "desc" }],
+    select: {
+      id: true,
+      fecha: true,
+      aceptacion: true,
+      tuvoReaccion: true,
+      descripcionReaccion: true,
+    },
+  });
+
+  const edadMeses = edadEnMeses(paciente.fechaNacimiento, hoyEnMexico());
+
+  return {
+    alimento: {
+      ...alimento,
+      apto: edadMeses >= alimento.edadMinimaMeses,
+    },
+    vecesOfrecido: registros.length,
+    tuvoReaccion: registros.some((r) => r.tuvoReaccion),
+    intentos: registros.map((r) => ({
+      id: r.id,
+      fecha: aFechaISO(r.fecha),
+      aceptacion: r.aceptacion,
+      tuvoReaccion: r.tuvoReaccion,
+      descripcionReaccion: r.descripcionReaccion,
+    })),
+  };
+};

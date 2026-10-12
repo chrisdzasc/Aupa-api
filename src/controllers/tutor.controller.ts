@@ -172,3 +172,16 @@ export const registrarAlimento = async (req: RequestTutor, res: Response) => {
     return responderError(res, error, "Error al registrar el alimento");
   }
 };
+
+export const detalleAlimento = async (req: RequestTutor, res: Response) => {
+  try {
+    const datos = await alimentoService.obtenerDetalleAlimento(
+      leerId(req.params.id),
+      req.tutorId!,
+      Number(req.params.alimentoId),
+    );
+    return res.status(200).json(datos);
+  } catch (error) {
+    return responderError(res, error, "Error al obtener el detalle");
+  }
+};
