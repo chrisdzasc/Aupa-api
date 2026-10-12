@@ -3,6 +3,7 @@ import { verificarToken } from "../middlewares/auth.middleware";
 import * as pacienteController from "../controllers/paciente.controller";
 import * as medicionController from "../controllers/medicion.controller";
 import * as citaController from "../controllers/cita.controller";
+import * as alimentoController from "../controllers/alimento.controller";
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.get("/:id/mediciones", medicionController.listar);
 router.get("/:id/curvas", pacienteController.curvas);
 
 router.get("/:id/citas", citaController.listarPorPaciente);
+router.get("/:id/alimentos", alimentoController.panel);
 
 export default router;

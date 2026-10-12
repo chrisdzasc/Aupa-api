@@ -1,5 +1,5 @@
 import prisma from "../lib/prisma";
-import { Aceptacion } from "@prisma/client";
+import { Aceptacion, CategoriaAlimento } from "@prisma/client";
 import {
   aFechaISO,
   aFechaMexico,
@@ -37,6 +37,69 @@ type ResumenAlimento = {
   tuvoReaccion: boolean;
 };
 
+type AlimentoCatalogo = {
+  id: number;
+  nombre: string;
+  categoria: CategoriaAlimento;
+  edadMinimaMeses: number;
+  esAlergenoComun: boolean;
+};
+
+// Resume los intentos por alimento en una sola pasada. Los registros llegan de la más antigua a la más reciente, así que el último que se escribe es el vigente.
+const resumirPorAlimento = (
+  registros: {
+    alimentoId: number;
+    fecha: Date;
+    aceptacion: Aceptacion;
+    tuvoReaccion: boolean;
+  }[],
+) => {
+  const porAlimento = new Map<number, ResumenAlimento>();
+
+  for (const r of registros) {
+    const actual = porAlimento.get(r.alimentoId);
+    const ultimo = { fecha: aFechaISO(r.fecha), aceptacion: r.aceptacion };
+
+    if (actual) {
+      actual.veces++;
+      actual.ultimo = ultimo;
+      // Basta una reacción en cualquier intento para marcar el alimento
+      actual.tuvoReaccion = actual.tuvoReaccion || r.tuvoReaccion;
+    } else {
+      porAlimento.set(r.alimentoId, {
+        veces: 1,
+        ultimo,
+        tuvoReaccion: r.tuvoReaccion,
+      });
+    }
+  }
+
+  return porAlimento;
+};
+
+// Cruza el catálogo con lo que el niño ya probó
+const construirLista = (
+  alimentos: AlimentoCatalogo[],
+  porAlimento: Map<number, ResumenAlimento>,
+  edadMeses: number,
+) =>
+  alimentos.map((a) => {
+    const resumen = porAlimento.get(a.id);
+
+    return {
+      id: a.id,
+      nombre: a.nombre,
+      categoria: a.categoria,
+      edadMinimaMeses: a.edadMinimaMeses,
+      esAlergenoComun: a.esAlergenoComun,
+      // Si el niño ya tiene la edad recomendada para probarlo
+      apto: edadMeses >= a.edadMinimaMeses,
+      vecesOfrecido: resumen?.veces ?? 0,
+      ultimoIntento: resumen?.ultimo ?? null,
+      tuvoReaccion: resumen?.tuvoReaccion ?? false,
+    };
+  });
+
 // Checklist completo de un niño
 export const obtenerChecklist = async (pacienteId: number, tutorId: number) => {
   const paciente = await buscarPacienteDelTutor(pacienteId, tutorId);
@@ -63,43 +126,8 @@ export const obtenerChecklist = async (pacienteId: number, tutorId: number) => {
     }),
   ]);
 
-  // Resume los intentos por alimento en una sola pasada
-  const porAlimento = new Map<number, ResumenAlimento>();
-
-  for (const r of registros) {
-    const actual = porAlimento.get(r.alimentoId);
-    const ultimo = { fecha: aFechaISO(r.fecha), aceptacion: r.aceptacion };
-
-    if (actual) {
-      actual.veces++;
-      actual.ultimo = ultimo;
-      // Basta una reacción en cualquier intento para marcar el alimento
-      actual.tuvoReaccion = actual.tuvoReaccion || r.tuvoReaccion;
-    } else {
-      porAlimento.set(r.alimentoId, {
-        veces: 1,
-        ultimo,
-        tuvoReaccion: r.tuvoReaccion,
-      });
-    }
-  }
-
-  const lista = alimentos.map((a) => {
-    const resumen = porAlimento.get(a.id);
-
-    return {
-      id: a.id,
-      nombre: a.nombre,
-      categoria: a.categoria,
-      edadMinimaMeses: a.edadMinimaMeses,
-      esAlergenoComun: a.esAlergenoComun,
-      // Si el niño ya tiene la edad recomendada para probarlo
-      apto: edadMeses >= a.edadMinimaMeses,
-      vecesOfrecido: resumen?.veces ?? 0,
-      ultimoIntento: resumen?.ultimo ?? null,
-      tuvoReaccion: resumen?.tuvoReaccion ?? false,
-    };
-  });
+  const porAlimento = resumirPorAlimento(registros);
+  const lista = construirLista(alimentos, porAlimento, edadMeses);
 
   return {
     paciente: {
@@ -250,5 +278,142 @@ export const obtenerDetalleAlimento = async (
       tuvoReaccion: r.tuvoReaccion,
       descripcionReaccion: r.descripcionReaccion,
     })),
+  };
+};
+
+// El profesionista sí puede consultar pacientes que dio de baja.
+const buscarPacienteDelProfesionista = async (
+  pacienteId: number,
+  profesionistaId: number,
+) => {
+  const paciente = await prisma.paciente.findFirst({
+    where: { id: pacienteId, profesionistaId },
+    select: {
+      id: true,
+      nombre: true,
+      numeroExpediente: true,
+      fechaNacimiento: true,
+    },
+  });
+
+  if (!paciente) {
+    throw new Error("Paciente no encontrado");
+  }
+
+  return paciente;
+};
+
+// Orden fijo para que el avance por categoría siempre se pinte igual
+const CATEGORIAS: CategoriaAlimento[] = [
+  "FRUTA",
+  "VERDURA",
+  "CEREAL_TUBERCULO",
+  "LEGUMINOSA",
+  "ORIGEN_ANIMAL",
+  "LACTEO",
+  "GRASA_OLEAGINOSA",
+];
+
+// Panel de alimentación del expediente: los cuatro bloques de la pestaña derivados de las mismas consultas.
+export const obtenerPanelAlimentacion = async (
+  pacienteId: number,
+  profesionistaId: number,
+) => {
+  const paciente = await buscarPacienteDelProfesionista(
+    pacienteId,
+    profesionistaId,
+  );
+  const edadMeses = edadEnMeses(paciente.fechaNacimiento, hoyEnMexico());
+
+  // Medianoche de hoy en México, como momento exacto
+  const inicioDeHoy = new Date(`${aFechaMexico(new Date())}T00:00:00-06:00`);
+
+  const [alimentos, registros, consultaAnterior] = await Promise.all([
+    prisma.alimento.findMany({
+      where: { activo: true },
+      orderBy: [
+        { categoria: "asc" },
+        { edadMinimaMeses: "asc" },
+        { nombre: "asc" },
+      ],
+    }),
+    // A diferencia del checklist del tutor, aquí se traen el nombre del alimento y la descripción de la reacción
+    prisma.registroAlimento.findMany({
+      where: { pacienteId },
+      orderBy: [{ fecha: "asc" }, { id: "asc" }],
+      include: { alimento: { select: { nombre: true } } },
+    }),
+    // La última consulta terminada ANTES de hoy: si la consulta es hoy, lo que el nutriólogo quiere ver es lo registrado desde la visita anterior, no desde esta mañana.
+    prisma.cita.findFirst({
+      where: {
+        pacienteId,
+        profesionistaId,
+        estado: "COMPLETADA",
+        fechaHora: { lt: inicioDeHoy },
+      },
+      orderBy: { fechaHora: "desc" },
+      select: { fechaHora: true },
+    }),
+  ]);
+
+  const porAlimento = resumirPorAlimento(registros);
+  const lista = construirLista(alimentos, porAlimento, edadMeses);
+
+  const comoIntento = (r: (typeof registros)[number]) => ({
+    id: r.id,
+    alimentoId: r.alimentoId,
+    alimento: r.alimento.nombre,
+    fecha: aFechaISO(r.fecha),
+    aceptacion: r.aceptacion,
+    tuvoReaccion: r.tuvoReaccion,
+    descripcionReaccion: r.descripcionReaccion,
+  });
+
+  // Todas las reacciones del historial, de la más reciente a la más antigua
+  const reacciones = registros
+    .filter((r) => r.tuvoReaccion)
+    .reverse()
+    .map(comoIntento);
+
+  const avancePorCategoria = CATEGORIAS.map((categoria) => {
+    const deCategoria = lista.filter((a) => a.categoria === categoria);
+    const aptos = deCategoria.filter((a) => a.apto);
+
+    return {
+      categoria,
+      total: deCategoria.length,
+      aptos: aptos.length,
+      // Cuenta solo entre los que ya le corresponden por edad, para que la fracción nunca salga mayor que su total. Un alimento probado antes de tiempo sí aparece en el listado completo.
+      probados: aptos.filter((a) => a.vecesOfrecido > 0).length,
+    };
+  });
+
+  const desde = consultaAnterior
+    ? aFechaMexico(consultaAnterior.fechaHora)
+    : null;
+
+  // Se incluye el día de la consulta anterior: un registro de ese mismo día pudo capturarse después de la cita.
+  const recientes = registros
+    .filter((r) => (desde ? aFechaISO(r.fecha) >= desde : true))
+    .reverse()
+    .map(comoIntento);
+
+  return {
+    paciente: {
+      id: paciente.id,
+      nombre: paciente.nombre,
+      numeroExpediente: paciente.numeroExpediente,
+      edadMeses,
+    },
+    resumen: {
+      total: lista.length,
+      aptos: lista.filter((a) => a.apto).length,
+      probados: lista.filter((a) => a.vecesOfrecido > 0).length,
+    },
+    reacciones,
+    avancePorCategoria,
+    // desde en null significa que no hay consulta previa: se muestra todo
+    actividadReciente: { desde, intentos: recientes },
+    alimentos: lista,
   };
 };
