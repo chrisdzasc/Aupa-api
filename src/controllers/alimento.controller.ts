@@ -37,3 +37,37 @@ export const panel = async (req: RequestAutenticado, res: Response) => {
     );
   }
 };
+
+export const detalle = async (req: RequestAutenticado, res: Response) => {
+  try {
+    const datos = await alimentoService.obtenerDetalleParaProfesionista(
+      leerId(req.params.id, "paciente"),
+      req.profesionistaId!,
+      leerId(req.params.alimentoId, "alimento"),
+    );
+    return res.status(200).json(datos);
+  } catch (error) {
+    return responderError(res, error, "Error al obtener el detalle");
+  }
+};
+
+export const historial = async (req: RequestAutenticado, res: Response) => {
+  try {
+    const pagina = Number(req.query.pagina ?? 1);
+
+    if (!Number.isInteger(pagina) || pagina < 1) {
+      return res
+        .status(400)
+        .json({ mensaje: "La página debe ser un número entero mayor a cero" });
+    }
+
+    const datos = await alimentoService.obtenerHistorialAlimentos(
+      leerId(req.params.id, "paciente"),
+      req.profesionistaId!,
+      pagina,
+    );
+    return res.status(200).json(datos);
+  } catch (error) {
+    return responderError(res, error, "Error al obtener el historial");
+  }
+};

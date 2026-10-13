@@ -45,6 +45,26 @@ type AlimentoCatalogo = {
   esAlergenoComun: boolean;
 };
 
+type RegistroConAlimento = {
+  id: number;
+  alimentoId: number;
+  fecha: Date;
+  aceptacion: Aceptacion;
+  tuvoReaccion: boolean;
+  descripcionReaccion: string | null;
+  alimento: { nombre: string };
+};
+
+const comoIntento = (r: RegistroConAlimento) => ({
+  id: r.id,
+  alimentoId: r.alimentoId,
+  alimento: r.alimento.nombre,
+  fecha: aFechaISO(r.fecha),
+  aceptacion: r.aceptacion,
+  tuvoReaccion: r.tuvoReaccion,
+  descripcionReaccion: r.descripcionReaccion,
+});
+
 // Resume los intentos por alimento en una sola pasada. Los registros llegan de la más antigua a la más reciente, así que el último que se escribe es el vigente.
 const resumirPorAlimento = (
   registros: {
@@ -227,14 +247,12 @@ export const registrarIntento = async (
   };
 };
 
-// Todos los intentos de un alimento con un niño, del más reciente al más antiguo.
-export const obtenerDetalleAlimento = async (
+// Lo que comparten el detalle del tutor y el del nutriólogo: el alimento y todos sus intentos. Lo único distinto es quién tiene permiso de pedirlo, así que la verificación se queda afuera.
+const construirDetalle = async (
   pacienteId: number,
-  tutorId: number,
   alimentoId: number,
+  fechaNacimiento: Date,
 ) => {
-  const paciente = await buscarPacienteDelTutor(pacienteId, tutorId);
-
   const alimento = await prisma.alimento.findUnique({
     where: { id: alimentoId },
     select: {
@@ -262,7 +280,7 @@ export const obtenerDetalleAlimento = async (
     },
   });
 
-  const edadMeses = edadEnMeses(paciente.fechaNacimiento, hoyEnMexico());
+  const edadMeses = edadEnMeses(fechaNacimiento, hoyEnMexico());
 
   return {
     alimento: {
@@ -279,6 +297,16 @@ export const obtenerDetalleAlimento = async (
       descripcionReaccion: r.descripcionReaccion,
     })),
   };
+};
+
+// Detalle para el tutor: solo sobre sus propios hijos
+export const obtenerDetalleAlimento = async (
+  pacienteId: number,
+  tutorId: number,
+  alimentoId: number,
+) => {
+  const paciente = await buscarPacienteDelTutor(pacienteId, tutorId);
+  return construirDetalle(pacienteId, alimentoId, paciente.fechaNacimiento);
 };
 
 // El profesionista sí puede consultar pacientes que dio de baja.
@@ -359,16 +387,6 @@ export const obtenerPanelAlimentacion = async (
   const porAlimento = resumirPorAlimento(registros);
   const lista = construirLista(alimentos, porAlimento, edadMeses);
 
-  const comoIntento = (r: (typeof registros)[number]) => ({
-    id: r.id,
-    alimentoId: r.alimentoId,
-    alimento: r.alimento.nombre,
-    fecha: aFechaISO(r.fecha),
-    aceptacion: r.aceptacion,
-    tuvoReaccion: r.tuvoReaccion,
-    descripcionReaccion: r.descripcionReaccion,
-  });
-
   // Todas las reacciones del historial, de la más reciente a la más antigua
   const reacciones = registros
     .filter((r) => r.tuvoReaccion)
@@ -415,5 +433,50 @@ export const obtenerPanelAlimentacion = async (
     // desde en null significa que no hay consulta previa: se muestra todo
     actividadReciente: { desde, intentos: recientes },
     alimentos: lista,
+  };
+};
+
+// Detalle para el nutriólogo, al expandir la fila de un alimento
+export const obtenerDetalleParaProfesionista = async (
+  pacienteId: number,
+  profesionistaId: number,
+  alimentoId: number,
+) => {
+  const paciente = await buscarPacienteDelProfesionista(
+    pacienteId,
+    profesionistaId,
+  );
+  return construirDetalle(pacienteId, alimentoId, paciente.fechaNacimiento);
+};
+
+const INTENTOS_POR_PAGINA = 15;
+
+// Historial completo de intentos, paginado, para el botón de "ver todo" del bloque de actividad reciente.
+export const obtenerHistorialAlimentos = async (
+  pacienteId: number,
+  profesionistaId: number,
+  pagina: number,
+) => {
+  await buscarPacienteDelProfesionista(pacienteId, profesionistaId);
+
+  const [total, registros] = await Promise.all([
+    prisma.registroAlimento.count({ where: { pacienteId } }),
+    prisma.registroAlimento.findMany({
+      where: { pacienteId },
+      orderBy: [{ fecha: "desc" }, { id: "desc" }],
+      skip: (pagina - 1) * INTENTOS_POR_PAGINA,
+      take: INTENTOS_POR_PAGINA,
+      include: { alimento: { select: { nombre: true } } },
+    }),
+  ]);
+
+  return {
+    intentos: registros.map(comoIntento),
+    paginacion: {
+      pagina,
+      porPagina: INTENTOS_POR_PAGINA,
+      total,
+      totalPaginas: Math.max(1, Math.ceil(total / INTENTOS_POR_PAGINA)),
+    },
   };
 };
